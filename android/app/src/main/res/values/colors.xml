@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- アイコンの背景・OSの起動画面の背景（クリーム色。アイコンの背景と同じ） -->
+    <color name="ic_launcher_background">#FCF7EF</color>
+</resources>
