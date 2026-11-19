@@ -1,61 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../services/calendar_service.dart';
 import 'app_settings.dart';
 import '../services/google_auth.dart';
+import 'models/calendar_event.dart';
 import '../services/errors.dart';
 
-class CalendarEvent {
-  CalendarEvent({
-    this.id,
-    required this.title,
-    required this.start,
-    DateTime? end,
-    this.allDay = false,
-    this.note,
-    this.location,
-    this.recurring = false,
-  }) : end = end ??
-            (allDay
-                ? DateTime(start.year, start.month, start.day + 1)
-                : start.add(const Duration(hours: 1)));
-
-  /// Googleカレンダーの予定ID（ダミーや未保存なら null）
-  final String? id;
-  final String title;
-  final DateTime start;
-
-  /// 終了日時。終日の予定は「最後の日の翌日」（Googleカレンダーと同じ表し方）
-  final DateTime end;
-  final bool allDay;
-  final String? note;
-  final String? location;
-
-  /// 繰り返しの予定の1回分か
-  final bool recurring;
-
-  /// 終日の予定の最後の日
-  DateTime get lastDay => DateTime(end.year, end.month, end.day - 1);
-
-  CalendarEvent copyWith({
-    String? title,
-    DateTime? start,
-    DateTime? end,
-    bool? allDay,
-    String? note,
-    String? location,
-  }) =>
-      CalendarEvent(
-        id: id,
-        title: title ?? this.title,
-        start: start ?? this.start,
-        end: end ?? this.end,
-        allDay: allDay ?? this.allDay,
-        note: note ?? this.note,
-        location: location ?? this.location,
-        recurring: recurring,
-      );
-}
+export 'models/calendar_event.dart';
 
 /// 予定の保管場所（ログイン後はGoogleカレンダー。ログアウト中は空）
 final calendarStore = CalendarStore([]);
@@ -194,8 +145,35 @@ class CalendarStore extends ChangeNotifier {
     } else {
       _events.add(saved);
     }
+    // 月ごとに読んだ分も新しい内容にする（月表示の📝などがすぐ変わるように。2026-11-19）
+    for (final list in _months.values) {
+      for (var k = 0; k < list.length; k++) {
+        if (identical(list[k], old) || (old.id != null && list[k].id == old.id)) list[k] = saved;
+      }
+    }
     notifyListeners();
     return saved;
+  }
+
+  /// メールにリンクしている予定を Google カレンダーで探す（表示期間より先・過去も。2026-11-19）。
+  /// 検索で余分に見つかった予定は、リンクの行を確かめて除く
+  Future<List<CalendarEvent>> searchMailLinked(String mailId) async {
+    final service = _service;
+    if (service == null) return const [];
+    final list = await service.search(mailId);
+    return list.where((e) => e.mailLinks.any((l) => l.id == mailId)).toList();
+  }
+
+  /// 読み込み済みの予定すべて（一覧の分＋月ごとに読んだ分。同じ予定は1つ）
+  List<CalendarEvent> get allLoaded {
+    final seen = <String>{};
+    final out = <CalendarEvent>[];
+    for (final e in [..._events, for (final list in _months.values) ...list]) {
+      if (e.id != null && !seen.add(e.id!)) continue;
+      out.add(e);
+    }
+    out.sort((a, b) => a.start.compareTo(b.start));
+    return out;
   }
 
   /// 予定を削除する。先に一覧から消し、Google側で失敗したら一覧に戻して例外を投げる
@@ -226,6 +204,8 @@ class CalendarStore extends ChangeNotifier {
         allDay: e.allDay,
         note: e.note,
         location: e.location,
+        memoLinks: e.memoLinks,
+        mailLinks: e.mailLinks,
       ));
 
   /// 自動読み込みがオフのとき：ダミーを消して、手動で読み込むまで空にする

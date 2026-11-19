@@ -1,7 +1,8 @@
 import 'package:googleapis/tasks/v1.dart' as gtasks;
 import 'package:http/http.dart' as http;
 
-import '../data/task_store.dart';
+import '../data/link_lines.dart';
+import '../data/models.dart';
 
 /// Google ToDoリスト（デフォルトのリスト）とのやり取り
 class TasksService {
@@ -37,10 +38,13 @@ class TasksService {
       final u = DateTime.parse(t.due!).toUtc();
       due = DateTime(u.year, u.month, u.day); // ToDoリストの期限は日付のみ
     }
+    final split = splitMemoLinks(t.notes);
     return TaskItem(
       title: t.title!,
       due: due,
-      note: t.notes,
+      note: split.body,
+      memoLinks: split.links,
+      mailLinks: split.mails,
       done: t.status == 'completed',
       googleTask: t,
     );
@@ -51,7 +55,11 @@ class TasksService {
 
   Future<TaskItem> insert(TaskItem item) async {
     final created = await _api.tasks.insert(
-      gtasks.Task(title: item.title, notes: item.note, due: _dueText(item.due)),
+      gtasks.Task(
+        title: item.title,
+        notes: joinMemoLinks(item.note, item.memoLinks, item.mailLinks),
+        due: _dueText(item.due),
+      ),
       _list,
     );
     return _fromGoogle(created) ?? item;
@@ -63,7 +71,7 @@ class TasksService {
     if (t == null || t.id == null) return item;
     t
       ..title = item.title
-      ..notes = item.note
+      ..notes = joinMemoLinks(item.note, item.memoLinks, item.mailLinks)
       ..due = _dueText(item.due);
     final updated = await _api.tasks.update(t, _list, t.id!);
     return _fromGoogle(updated) ?? item;

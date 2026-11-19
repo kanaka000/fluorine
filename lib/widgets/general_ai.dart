@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../data/models.dart';
+import '../screens/mail_search_screen.dart';
 import '../screens/reply_screen.dart';
+import '../services/mail_search.dart';
 import '../services/claude_service.dart';
 import '../services/contacts_service.dart';
 import 'add_sheets.dart';
+import 'ai_common.dart';
 import 'ai_prompt.dart';
-import '../services/errors.dart';
 
 /// AIボタンのステップ2：どの画面の✨からでも使う共通の処理
 
-const generalAiHint = '例：明日の予定は？／期限が近いタスクは？／田中さんに打ち合わせのお礼メールを作って／金曜15時に歯医者を入れて';
+const generalAiHint = '例：明日の予定は？／期限が近いタスクは？／田中さんに打ち合わせのお礼メールを作って／金曜15時に歯医者を入れて／見積書が添付されたメールを探して';
 
-/// AIが作った新しい予定の下書きで、追加画面を開く（保存は自分で押す）
-Future<void> openNewEventFromAi(BuildContext context, AiEvent r) async {
+/// AIが作った新しい予定の下書きで、追加画面を開く（保存は自分で押す）。[mail] があればメールから作る
+Future<void> openNewEventFromAi(BuildContext context, AiEvent r, {Mail? mail}) async {
   await showAddEventSheet(
     context,
-    null,
+    mail,
     title: r.title,
     date: r.date,
     time: r.time,
@@ -118,39 +121,18 @@ Future<void> runGeneralAi(
   String instruction, {
   required void Function(bool busy) setBusy,
 }) async {
-  setBusy(true);
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(SnackBar(
-    content: Text('AIが考えています…（$instruction）'),
-    duration: const Duration(seconds: 30),
-  ));
-  AiResult result;
-  try {
-    result = await ClaudeService.askAnything(instruction: instruction);
-  } catch (e) {
-    messenger.hideCurrentSnackBar();
-    setBusy(false);
-    messenger.showSnackBar(SnackBar(content: Text('AIに頼めませんでした：${friendlyError(e)}')));
-    return;
-  }
-  messenger.hideCurrentSnackBar();
-  setBusy(false);
-  if (!context.mounted) return;
+  final result = await askAiWithStatus(context, instruction, setBusy: setBusy, ask: () => ClaudeService.askAnything(instruction: instruction));
+  if (result == null || !context.mounted) return;
 
   switch (result) {
-    case AiEvent r:
-      await openNewEventFromAi(context, r);
-    case AiTask r:
-      showAddTaskSheet(context, null, title: r.title, due: r.due, note: r.note);
-    case AiMemo r:
-      showAddMemoSheet(context, null, title: r.title, body: r.body);
-    case AiNewMail r:
-      await openNewMailFromAi(context, r);
-    case AiReply r:
-      showAiAnswer(context, instruction, r.body);
-    case AiAnswer r:
-      showAiAnswer(context, instruction, r.text);
-    case AiDeleteEvent _ || AiTaskUpdate _ || AiTaskComplete _ || AiTaskDelete _ || AiMemoUpdate _ || AiMemoDelete _:
-      showAiAnswer(context, instruction, '予定・タスク・メモの変更や削除は、それぞれのタブの✨から頼んでください。');
+    case AiMailSearch r:
+      // メールを探す（2026-11-19）。手がかりがなければ案内だけ
+      if (buildMailQuery(r).isEmpty) {
+        showAiAnswer(context, instruction, '何を探すか分かりませんでした。言葉・差出人・添付の種類・期間などを入れて頼んでください。');
+        return;
+      }
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MailSearchScreen(search: r)));
+    default:
+      await handleCommonAiResult(context, instruction, result);
   }
 }

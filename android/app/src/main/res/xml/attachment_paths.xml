@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 添付ファイルを外部アプリに渡すための場所（2026-11-19）。
+     アプリの一時フォルダの中の attachments だけを渡せるようにする -->
+<paths>
+    <cache-path name="attachments" path="attachments/" />
+</paths>

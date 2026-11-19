@@ -10,6 +10,7 @@ import '../data/task_store.dart';
 import 'google_auth.dart';
 import 'sync.dart';
 import 'errors.dart';
+import 'attachment_opener.dart';
 
 /// 起動時の準備（2026-11-16 追加）
 /// メールの読み込みが終わるまでスプラッシュ画面を出し、終わったら startupDone を true にする
@@ -35,6 +36,8 @@ Future<void> loadAppVersion() async {
 
 /// Googleログインの準備と、起動時のメールの読み込み
 Future<void> runStartup() async {
+  // 添付を開いたときの一時ファイルのうち、1日より古いものを消す（2026-11-19）
+  unawaited(cleanupAttachmentCache());
   try {
     // 以前ログインしていれば、ログイン状態を復元する（電波が悪くて固まったときは待たずに進む）
     await googleAuth.init().timeout(_maxWait);

@@ -154,10 +154,61 @@ class MailStore extends ChangeNotifier {
     loading = false; // 読み込み中でも、ログインし直したらすぐ読み込めるように
     _gmail = null;
     _historyId = null;
+    _byId.clear();
     lastLoaded = null;
     error = null;
     _mails.clear();
     notifyListeners();
+  }
+
+  /// リンクから開くメール（受信トレイにないものも）を覚えておく。null＝見つからない（2026-11-19）
+  final Map<String, Mail?> _byId = {};
+
+  /// 読み込み済みのメールから探す（なければ null）
+  Mail? loadedMail(String id) {
+    for (final m in _mails) {
+      if (m.id == id) return m;
+    }
+    return _byId[id];
+  }
+
+  /// IDでメールを探す。読み込み済みになければ Gmail から1通読む。完全に消えていれば null。
+  /// ログアウト中・通信の失敗は例外
+  Future<Mail?> mailById(String id) async {
+    final m = loadedMail(id);
+    if (m != null || _byId.containsKey(id)) return m;
+    final gmail = _gmail;
+    if (gmail == null) throw const AppMessage('Googleにログインしてください');
+    final found = await gmail.fetchById(id);
+    _byId[id] = found;
+    return found;
+  }
+
+  /// メールを探す（✨の「メールを探して」。2026-11-19）。
+  /// 受信トレイの一覧にあるメールは同じものを使う（既読などがそろうように）
+  Future<List<Mail>> searchMails(String query) async {
+    final gmail = _gmail;
+    if (gmail == null) throw const AppMessage('Googleにログインしてください');
+    final gen = googleAuth.session;
+    final found = await gmail.search(query);
+    if (gen != googleAuth.session) throw const AppMessage('ログアウトしたため中止しました');
+    return [
+      for (final m in found)
+        if (loadedMail(m.id) case final known?)
+          (known.bodyLoaded || known.attachments.isNotEmpty ? known : (known..attachments = m.attachments))
+        else
+          m,
+    ];
+  }
+
+  /// 添付ファイルの中身を読み込む（外部アプリで開くため。2026-11-19）
+  Future<List<int>> downloadAttachment(Mail mail, MailAttachment a) async {
+    final gmail = _gmail;
+    if (gmail == null) throw const AppMessage('Googleにログインしてください');
+    final gen = googleAuth.session;
+    final bytes = await gmail.downloadAttachment(mail.id, a);
+    if (gen != googleAuth.session) throw const AppMessage('ログアウトしたため中止しました');
+    return bytes;
   }
 
   /// 本文の全文がまだなら取得する

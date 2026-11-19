@@ -1,7 +1,8 @@
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:http/http.dart' as http;
 
-import '../data/calendar_store.dart';
+import '../data/models.dart';
+import '../data/link_lines.dart';
 
 /// Googleカレンダー（メインのカレンダー）とのやり取り
 class CalendarService {
@@ -40,6 +41,12 @@ class CalendarService {
     return result;
   }
 
+  /// メモ欄の文字で予定を探す（メールのリンクの逆引き用。期間は限らない。2026-11-19）
+  Future<List<CalendarEvent>> search(String text) async {
+    final res = await _api.events.list(_cal, q: text, singleEvents: true, maxResults: 50);
+    return (res.items ?? <gcal.Event>[]).map(_fromGoogle).whereType<CalendarEvent>().toList();
+  }
+
   static CalendarEvent? _fromGoogle(gcal.Event e) {
     final dt = e.start?.dateTime;
     final date = e.start?.date;
@@ -54,13 +61,16 @@ class CalendarService {
     } else if (!allDay && endDt != null) {
       end = endDt.toLocal();
     }
+    final split = splitMemoLinks(e.description);
     return CalendarEvent(
       id: e.id,
       title: (e.summary ?? '').isEmpty ? '（タイトルなし）' : e.summary!,
       start: start,
       end: end,
       allDay: allDay,
-      note: e.description,
+      note: split.body,
+      memoLinks: split.links,
+      mailLinks: split.mails,
       location: e.location,
       recurring: e.recurringEventId != null,
     );
@@ -70,7 +80,7 @@ class CalendarService {
   static gcal.Event _toGoogle(CalendarEvent e) {
     final event = gcal.Event(
       summary: e.title,
-      description: e.note ?? '',
+      description: joinMemoLinks(e.note, e.memoLinks, e.mailLinks),
       location: e.location ?? '',
     );
     if (e.allDay) {

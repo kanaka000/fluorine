@@ -4,6 +4,7 @@ import '../data/mail_store.dart';
 import '../data/models.dart';
 import '../data/sender_merges.dart';
 import '../widgets/format.dart';
+import '../widgets/links/links.dart';
 import '../widgets/sender_avatar.dart';
 import '../widgets/timed_snack.dart';
 import 'mail_detail_screen.dart';
@@ -102,6 +103,8 @@ class _MailListScreenState extends State<MailListScreen> {
                 key: ValueKey(mail.id),
                 background: const _DeleteBackground(alignment: Alignment.centerLeft),
                 secondaryBackground: const _DeleteBackground(alignment: Alignment.centerRight),
+                // 予定・タスクにリンクしているメールは、削除してよいか確かめる（2026-11-19）
+                confirmDismiss: (_) => confirmDeleteLinkedMail(context, mail),
                 onDismissed: (_) {
                   mailStore.trash(mail);
                   showTimedSnack(context, 'メールを削除しました',

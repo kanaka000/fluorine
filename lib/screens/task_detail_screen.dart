@@ -4,6 +4,7 @@ import '../data/task_store.dart';
 import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/links/links.dart';
 import '../widgets/task_ai.dart';
 
 /// タスクの詳細（タスクの一覧でタップすると開く）
@@ -52,6 +53,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Future<void> _edit() async {
     final saved = await showEditTaskSheet(context, _current);
     if (saved != null && mounted) setState(() => _task = saved);
+  }
+
+  /// つないだメモを保存する（Googleのメモ欄の最後の行。失敗したら例外）
+  Future<void> _saveLinks(List<MemoLinkRef> links) async {
+    final t = _current;
+    final saved = await taskStore.update(t, t.copyWith(memoLinks: links));
+    if (mounted) setState(() => _task = saved);
+  }
+
+  /// つないだメールを保存する（2026-11-19）
+  Future<void> _saveMailLinks(List<MailLinkRef> links) async {
+    final t = _current;
+    final saved = await taskStore.update(t, t.copyWith(mailLinks: links));
+    if (mounted) setState(() => _task = saved);
   }
 
   Future<void> _delete() async {
@@ -120,7 +135,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 const Divider(height: 24),
                 SelectableText(note, style: theme.textTheme.bodyLarge?.copyWith(height: 1.6)),
               ],
-              const SizedBox(height: 24),
+              MemoLinkSection(links: t.memoLinks, onChanged: _saveLinks),
+              MailLinkSection(links: t.mailLinks, onChanged: _saveMailLinks),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(

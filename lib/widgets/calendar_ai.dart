@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 
+import 'confirm_dialog.dart';
 import '../data/app_settings.dart';
 import '../data/calendar_store.dart';
 import '../services/claude_service.dart';
 import 'add_sheets.dart';
+import 'ai_common.dart';
 import 'ai_prompt.dart';
-import 'general_ai.dart';
+import 'link_ai.dart';
 import 'timed_snack.dart';
 import '../services/errors.dart';
+import '../util/date_text.dart';
 
-const _week = ['月', '火', '水', '木', '金', '土', '日'];
-String _two(int v) => v.toString().padLeft(2, '0');
-String _day(DateTime d) => '${d.month}/${d.day}（${_week[d.weekday - 1]}）';
-String _hm(DateTime d) => '${_two(d.hour)}:${_two(d.minute)}';
+String _day(DateTime d) => '${d.month}/${d.day}（${weekdayJa(d)}）';
+String _hm(DateTime d) => hhmm(d);
 
 /// 予定の日時を「11/17（月） 10:00〜11:00」のような文字にする
 String formatEventWhen(CalendarEvent e, {bool withYear = false}) {
@@ -31,19 +32,9 @@ Future<bool> confirmDeleteEvent(
   CalendarEvent event, {
   String title = '予定を削除しますか？',
 }) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text('「${event.title}」\n${formatEventWhen(event)}'
-          '${event.recurring ? '\n\n繰り返しの予定です。この回だけを削除します。' : ''}'),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('やめる')),
-        FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('削除')),
-      ],
-    ),
-  );
-  if (ok != true || !context.mounted) return false;
+  final ok = await askConfirm(context, title: title, message: '「${event.title}」\n${formatEventWhen(event)}'
+          '${event.recurring ? '\n\n繰り返しの予定です。この回だけを削除します。' : ''}', okLabel: '削除');
+  if (!ok || !context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
   try {
     await calendarStore.remove(event);
@@ -62,7 +53,7 @@ List<CalendarEvent> _upcoming() {
 }
 
 const calendarAiHint = '例：明日の15時から歯医者を入れて／明日の歯医者を消して／今週の予定は？／期限が近いタスクは？';
-const eventAiHint = '例：15時からに変更して／場所を渋谷駅にして／準備することをタスクにして／この予定を削除して';
+const eventAiHint = '例：15時からに変更して／場所を渋谷駅にして／準備することをタスクにして／買い物リストのメモをつないで／この予定を削除して';
 
 /// カレンダーのAIボタンの処理。
 /// [selected] があればその予定を対象にする（詳細画面）。変更の画面で保存したら [onUpdated] を呼ぶ
@@ -74,29 +65,13 @@ Future<void> runCalendarAi(
   void Function(CalendarEvent updated)? onUpdated,
   VoidCallback? onDeleted,
 }) async {
-  setBusy(true);
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(SnackBar(
-    content: Text('AIが考えています…（$instruction）'),
-    duration: const Duration(seconds: 30),
-  ));
-  AiResult result;
   final upcoming = _upcoming(); // AIに渡す一覧（削除の番号はこの順）
-  try {
-    result = await ClaudeService.askAboutCalendar(
+  final result = await askAiWithStatus(context, instruction, setBusy: setBusy, ask: () => ClaudeService.askAboutCalendar(
       instruction: instruction,
       upcoming: upcoming,
       selected: selected,
-    );
-  } catch (e) {
-    messenger.hideCurrentSnackBar();
-    setBusy(false);
-    messenger.showSnackBar(SnackBar(content: Text('AIに頼めませんでした：${friendlyError(e)}')));
-    return;
-  }
-  messenger.hideCurrentSnackBar();
-  setBusy(false);
-  if (!context.mounted) return;
+    ));
+  if (result == null || !context.mounted) return;
 
   // 選んでいる予定から作るタスク・メモには、元の予定の情報を付ける
   final source = selected == null ? null : '予定：${selected.title}\n${formatEventWhen(selected, withYear: true)}';
@@ -149,17 +124,10 @@ Future<void> runCalendarAi(
       }
       final deleted = await confirmDeleteEvent(context, target);
       if (deleted && selected != null) onDeleted?.call();
-    case AiTask r:
-      showAddTaskSheet(context, null, title: r.title, due: r.due, note: r.note, source: source);
-    case AiMemo r:
-      showAddMemoSheet(context, null, title: r.title, body: r.body, source: source);
-    case AiReply r:
-      showAiAnswer(context, instruction, r.body);
-    case AiTaskUpdate _ || AiTaskComplete _ || AiTaskDelete _ || AiMemoUpdate _ || AiMemoDelete _:
-      showAiAnswer(context, instruction, 'タスクやメモの変更・削除は、それぞれの画面から頼んでください。');
-    case AiNewMail r:
-      await openNewMailFromAi(context, r);
-    case AiAnswer r:
-      showAiAnswer(context, instruction, r.text);
+    case AiLink r when selected != null:
+      final saved = await runLinkAi(context, r, event: selected);
+      if (saved != null) onUpdated?.call(saved);
+    default:
+      await handleCommonAiResult(context, instruction, result, source: source, openHint: '予定');
   }
 }

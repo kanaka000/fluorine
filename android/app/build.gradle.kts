@@ -73,3 +73,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // 添付ファイルを外部アプリに渡す（FileProvider）ため（2026-11-19）。
+    // ほかのパッケージ経由ですでに入っている版と同じ
+    implementation("androidx.core:core:1.17.0")
+}

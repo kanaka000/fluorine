@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'confirm_dialog.dart';
 import '../data/app_settings.dart';
 import '../data/memo_store.dart';
 import '../services/claude_service.dart';
 import 'add_sheets.dart';
+import 'ai_common.dart';
 import 'ai_prompt.dart';
-import 'general_ai.dart';
+import 'link_ai.dart';
 import 'timed_snack.dart';
-import '../services/errors.dart';
 
 const memoAiHint = '例：買い物リストのメモを作って／会議のメモはどれ？／買い物リストに牛乳を足して';
-const memoDetailAiHint = '例：要点を箇条書きにして／やることをタスクにして／このメモを要約して／このメモを削除して';
+const memoDetailAiHint = '例：要点を箇条書きにして／やることをタスクにして／このメモを要約して／土曜の買い物の予定につないで／このメモを削除して';
 
 /// 日時を「11/16 9:05」のような文字にする
 String formatMemoTime(DateTime d) {
@@ -22,18 +23,8 @@ String formatMemoTime(DateTime d) {
 
 /// 確認ダイアログを出してからメモを削除する。削除したら true
 Future<bool> confirmDeleteMemo(BuildContext context, Memo memo) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('メモを削除しますか？'),
-      content: Text('「${memo.title}」'),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('やめる')),
-        FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('削除')),
-      ],
-    ),
-  );
-  if (ok != true || !context.mounted) return false;
+  final ok = await askConfirm(context, title: 'メモを削除しますか？', message: '「${memo.title}」', okLabel: '削除');
+  if (!ok || !context.mounted) return false;
   await memoStore.remove(memo);
   if (context.mounted && appSettings.showSavedNotice) showTimedSnack(context, 'メモを削除しました');
   return true;
@@ -48,25 +39,9 @@ Future<void> runMemoAi(
   required void Function(bool busy) setBusy,
   VoidCallback? onDeleted,
 }) async {
-  setBusy(true);
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(SnackBar(
-    content: Text('AIが考えています…（$instruction）'),
-    duration: const Duration(seconds: 30),
-  ));
   final list = memoStore.memos; // AIに渡す一覧（番号はこの順）
-  AiResult result;
-  try {
-    result = await ClaudeService.askAboutMemos(instruction: instruction, memos: list, selected: selected);
-  } catch (e) {
-    messenger.hideCurrentSnackBar();
-    setBusy(false);
-    messenger.showSnackBar(SnackBar(content: Text('AIに頼めませんでした：${friendlyError(e)}')));
-    return;
-  }
-  messenger.hideCurrentSnackBar();
-  setBusy(false);
-  if (!context.mounted) return;
+  final result = await askAiWithStatus(context, instruction, setBusy: setBusy, ask: () => ClaudeService.askAboutMemos(instruction: instruction, memos: list, selected: selected));
+  if (result == null || !context.mounted) return;
 
   /// 番号からメモを決める（番号がなければ選んでいるメモ）
   // 番号がないときは選んでいるメモ。範囲外の番号は使わない（2026-11-18 B04：選んでいるメモに勝手に置き換えない）
@@ -77,8 +52,6 @@ Future<void> runMemoAi(
   final source = selected == null ? null : 'メモ：${selected.title}';
 
   switch (result) {
-    case AiMemo r:
-      showAddMemoSheet(context, null, title: r.title, body: r.body, source: source);
     case AiMemoUpdate r:
       final mu = target(r.number);
       if (mu == null) {
@@ -94,17 +67,9 @@ Future<void> runMemoAi(
       }
       final deleted = await confirmDeleteMemo(context, md);
       if (deleted && selected != null && md.id == selected.id) onDeleted?.call();
-    case AiTask r:
-      showAddTaskSheet(context, null, title: r.title, due: r.due, note: r.note, source: source);
-    case AiReply r:
-      showAiAnswer(context, instruction, r.body);
-    case AiEvent r:
-      await openNewEventFromAi(context, r);
-    case AiNewMail r:
-      await openNewMailFromAi(context, r);
-    case AiAnswer r:
-      showAiAnswer(context, instruction, r.text);
-    case AiDeleteEvent _ || AiTaskUpdate _ || AiTaskComplete _ || AiTaskDelete _:
-      showAiAnswer(context, instruction, '予定やタスクの変更は、それぞれの画面から頼んでください。');
+    case AiLink r when selected != null:
+      await runLinkAi(context, r, memo: selected);
+    default:
+      await handleCommonAiResult(context, instruction, result, source: source, openHint: 'メモ');
   }
 }

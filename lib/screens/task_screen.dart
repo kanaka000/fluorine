@@ -10,6 +10,7 @@ import '../widgets/sign_in_prompt.dart';
 import '../widgets/swipe_delete.dart';
 import '../widgets/sync_status.dart';
 import '../widgets/task_ai.dart';
+import '../widgets/links/links.dart';
 import 'settings_screen.dart';
 import 'task_detail_screen.dart';
 
@@ -149,7 +150,7 @@ class _TaskScreenState extends State<TaskScreen> {
     final overdue = !t.done && t.due != null && t.due!.isBefore(today);
     return ListTile(
       leading: Checkbox(value: t.done, onChanged: (_) => taskStore.toggle(t)),
-      title: Text(t.title,
+      title: Text(titleWithLinkMarks(t.title, t.memoLinks, t.mailLinks),
           style: t.done ? TextStyle(decoration: TextDecoration.lineThrough, color: theme.colorScheme.outline) : null),
       subtitle: lines.isEmpty
           ? null

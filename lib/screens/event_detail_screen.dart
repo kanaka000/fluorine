@@ -6,6 +6,7 @@ import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/calendar_ai.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/links/links.dart';
 
 /// 予定の詳細（カレンダーの一覧で予定をタップすると開く）
 class EventDetailScreen extends StatefulWidget {
@@ -71,6 +72,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  /// つないだメモを保存する（Googleのメモ欄の最後の行。失敗したら例外）
+  Future<void> _saveLinks(List<MemoLinkRef> links) async {
+    final saved = await calendarStore.update(_event, _event.copyWith(memoLinks: links));
+    if (mounted) setState(() => _event = saved);
+  }
+
+  /// つないだメールを保存する（2026-11-19）
+  Future<void> _saveMailLinks(List<MailLinkRef> links) async {
+    final saved = await calendarStore.update(_event, _event.copyWith(mailLinks: links));
+    if (mounted) setState(() => _event = saved);
+  }
+
   Future<void> _openMap(String place) async {
     final uri = Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': place});
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -118,7 +131,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             const Divider(height: 24),
             SelectableText(note, style: theme.textTheme.bodyLarge?.copyWith(height: 1.6)),
           ],
-          const SizedBox(height: 24),
+          MemoLinkSection(links: e.memoLinks, onChanged: _saveLinks),
+          MailLinkSection(links: e.mailLinks, onChanged: _saveMailLinks),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(

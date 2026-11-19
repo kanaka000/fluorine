@@ -11,8 +11,10 @@ import '../widgets/header_actions.dart';
 import '../widgets/sign_in_prompt.dart';
 import '../widgets/swipe_delete.dart';
 import '../widgets/sync_status.dart';
+import '../widgets/links/links.dart';
 import 'event_detail_screen.dart';
 import 'settings_screen.dart';
+import '../util/date_text.dart';
 
 /// カレンダー（ログイン後はGoogleカレンダーの予定。期間は「カレンダーの設定」で変えられる）
 /// 表示は2種類：スケジュールの一覧／月のカレンダー（上）＋選んだ日の予定（下）。右上のボタンで切り替える
@@ -24,7 +26,6 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  static const _week = ['月', '火', '水', '木', '金', '土', '日'];
 
   bool _aiBusy = false;
 
@@ -53,13 +54,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   String _label(DateTime d, DateTime today) {
     final diff = d.difference(today).inDays;
-    final base = '${d.month}/${d.day}（${_week[d.weekday - 1]}）';
+    final base = '${d.month}/${d.day}（${weekdayJa(d)}）';
     if (diff == 0) return '今日 $base';
     if (diff == 1) return '明日 $base';
     return base;
   }
 
-  static String _hm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  static String _hm(DateTime d) => hhmm(d);
 
   // ---------------- AIボタン（予定の追加・予定についての質問） ----------------
 
@@ -104,7 +105,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final sub = [if (place.isNotEmpty) '📍 $place', if (note.isNotEmpty) note].join('\n');
     return ListTile(
       leading: SizedBox(width: 48, child: time),
-      title: Text(e.title),
+      title: Text(titleWithLinkMarks(e.title, e.memoLinks, e.mailLinks)),
       subtitle: sub.isEmpty ? null : Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => EventDetailScreen(event: e)),

@@ -7,6 +7,7 @@ import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/header_actions.dart';
 import '../widgets/memo_ai.dart';
+import '../widgets/links/links.dart';
 import '../widgets/memo_markdown.dart';
 import '../widgets/timed_snack.dart';
 import 'reply_screen.dart';
@@ -150,6 +151,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
                 Text('（本文なし）', style: theme.textTheme.bodyLarge)
               else
                 MemoMarkdown(body: m.body, onToggle: _toggleCheck),
+              MemoBacklinkSection(memo: m),
               const SizedBox(height: 24),
               Row(
                 children: [

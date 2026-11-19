@@ -1,36 +1,11 @@
 import 'package:flutter/foundation.dart';
-import 'package:googleapis/tasks/v1.dart' as gtasks;
 
 import '../services/google_auth.dart';
 import '../services/tasks_service.dart';
+import 'models/task_item.dart';
 import '../services/errors.dart';
 
-class TaskItem {
-  TaskItem({required this.title, this.due, this.note, this.done = false, this.googleTask});
-
-  final String title;
-  final DateTime? due;
-  final String? note;
-  bool done;
-
-  /// Google ToDoリスト側のデータ（連携中のみ）
-  final gtasks.Task? googleTask;
-
-  /// 内容を変えた写しを作る（期限を消すときは clearDue: true）
-  TaskItem copyWith({String? title, DateTime? due, bool clearDue = false, String? note}) => TaskItem(
-        title: title ?? this.title,
-        due: clearDue ? null : (due ?? this.due),
-        note: note ?? this.note,
-        done: done,
-        googleTask: googleTask,
-      );
-
-  bool sameAs(TaskItem other) {
-    if (identical(this, other)) return true;
-    final a = googleTask?.id;
-    return a != null && a == other.googleTask?.id;
-  }
-}
+export 'models/task_item.dart';
 
 /// タスクの保管場所（ログイン後はGoogle ToDoリスト。ログアウト中は空）
 final taskStore = TaskStore([]);
@@ -129,7 +104,7 @@ class TaskStore extends ChangeNotifier {
 
   /// 削除したタスクを元に戻す（Googleには新しいタスクとして作り直す。完了済みなら完了にする）
   Future<void> restore(TaskItem t) async {
-    final saved = await add(TaskItem(title: t.title, due: t.due, note: t.note));
+    final saved = await add(TaskItem(title: t.title, due: t.due, note: t.note, memoLinks: t.memoLinks, mailLinks: t.mailLinks));
     if (t.done) await toggle(saved);
   }
 

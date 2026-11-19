@@ -410,7 +410,7 @@ class _ReplyScreenState extends State<ReplyScreen> {
                                     hintText: 'メールアドレス（複数はカンマ区切り）',
                                   ),
                                 )
-                              : Text('${mail!.senderName} <${mail!.senderAddress}>',
+                              : Text('${mail!.senderName} <${mail.senderAddress}>',
                                   maxLines: 1, overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall),
                         ),

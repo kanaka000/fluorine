@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 
-
 import '../data/app_settings.dart';
 import '../data/mail_store.dart';
 import '../data/models.dart';
@@ -9,15 +8,17 @@ import '../data/recipients.dart';
 import '../services/claude_service.dart';
 import '../services/google_auth.dart';
 import '../widgets/add_sheets.dart';
+import '../widgets/ai_common.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/format.dart';
-import '../widgets/general_ai.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/link_ai.dart';
+import '../widgets/links/links.dart';
 import '../widgets/safe_link.dart';
 import '../widgets/sender_avatar.dart';
 import '../widgets/timed_snack.dart';
 import 'reply_screen.dart';
-import '../services/errors.dart';
+import '../services/attachment_opener.dart';
 
 /// ③ メール本文
 class MailDetailScreen extends StatefulWidget {
@@ -34,6 +35,36 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
 
   /// メール内の画像を表示するか（初期値は設定に従う）
   late bool _showImages = appSettings.loadImages;
+
+  /// 添付ファイルの1行（2026-11-19）
+  Widget _attachmentTile(ThemeData theme, MailAttachment a) {
+    final openable = checkAttachment(a) == AttachmentCheck.ok;
+    final color = openable ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.4);
+    final sub = openable ? theme.colorScheme.onSurfaceVariant : color;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => openAttachment(context, mail, a),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(openable ? Icons.attach_file : Icons.block, size: 18, color: sub),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(attachmentDisplayName(a.filename),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: color)),
+            ),
+            const SizedBox(width: 8),
+            Text(a.sizeText, style: theme.textTheme.bodySmall?.copyWith(color: sub)),
+            if (openable) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.open_in_new, size: 16, color: theme.colorScheme.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   /// リンクは https はそのまま、http は確認してから、mailto は新規メールで開く。それ以外は開かない（2026-11-18）
   Future<bool> _openLink(String url) => openSafeLink(context, url);
@@ -61,6 +92,9 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
   /// ダークモードでも、HTMLメールを元の色（白い背景）で表示するか。このメールを開いている間だけ有効
   bool _originalColors = false;
 
+  /// HTMLメールを文字だけで表示しているか（表示が崩れるメール用。2026-11-19）
+  bool _textView = false;
+
   /// 暗く表示するために色を外したHTML（毎回作り直さないよう取っておく）
   String? _darkSource;
   String? _darkHtml;
@@ -73,19 +107,46 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
     return _darkHtml!;
   }
 
+  // 表の直し（2026-11-19）。毎回作り直さないよう覚えておく
+  String? _tableSource;
+  String? _tableHtml;
+  String _fixedTables(String html) {
+    if (_tableSource != html) {
+      _tableSource = html;
+      _tableHtml = fixHtmlTableCells(html);
+    }
+    return _tableHtml!;
+  }
+
   /// HTMLメールの表示
   /// - ライトモード、または「元の色で表示」中：メールは白背景前提で作られているので、白い紙の上に表示する
   /// - ダークモード：メール側の文字色・背景色を外して、アプリの暗い配色で表示する
-  Widget _htmlBody(String html) {
+  Widget _htmlBody(String rawHtml) {
+    final html = _fixedTables(rawHtml);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final darkView = isDark && !_originalColors;
     final hasImages = html.toLowerCase().contains('<img');
+    // 「テキストで表示」ボタン（いつも出す。元の色で表示の右）
+    final textToggle = TextButton.icon(
+      icon: Icon(_textView ? Icons.web_outlined : Icons.notes),
+      label: Text(_textView ? 'HTMLで表示' : 'テキストで表示'),
+      onPressed: () => setState(() => _textView = !_textView),
+    );
+    if (_textView) {
+      // 文字だけの表示：テキスト版があればそれ、なければHTMLから取り出した文字（mail.body）
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          textToggle,
+          SelectableText(mail.body, style: theme.textTheme.bodyLarge?.copyWith(height: 1.6)),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((hasImages && !_showImages) || isDark)
-          Wrap(
+        Wrap(
             spacing: 4,
             children: [
               if (hasImages && !_showImages)
@@ -100,6 +161,7 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
                   label: Text(_originalColors ? '暗い色で表示' : '元の色で表示'),
                   onPressed: () => setState(() => _originalColors = !_originalColors),
                 ),
+              textToggle,
             ],
           ),
         Container(
@@ -149,7 +211,7 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
 
   // ---------------- AIボタン ----------------
 
-  static const _aiHint = '例：これを予定に入れて／タスクにして、期限は金曜／要点をメモにして／了解と返信して／何が言いたいの？／明日の予定は？';
+  static const _aiHint = '例：これを予定に入れて／タスクにして、期限は金曜／要点をメモにして／了解と返信して／打ち合わせの予定にリンクして／何が言いたいの？';
   bool _aiBusy = false;
 
   Future<void> _aiByVoice() async {
@@ -164,54 +226,29 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
 
   Future<void> _runAi(String instruction) async {
     if (_aiBusy) return;
-    setState(() => _aiBusy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(SnackBar(
-      content: Text('AIが考えています…（$instruction）'),
-      duration: const Duration(seconds: 30),
-    ));
-    AiResult result;
-    try {
-      await mailStore.ensureBody(mail); // 本文の全文がまだなら先に取る
-      result = await ClaudeService.askAboutMail(mail: mail, instruction: instruction);
-    } catch (e) {
-      messenger.hideCurrentSnackBar();
-      if (mounted) {
-        setState(() => _aiBusy = false);
-        messenger.showSnackBar(SnackBar(content: Text('AIに頼めませんでした：${friendlyError(e)}')));
-      }
-      return;
-    }
-    messenger.hideCurrentSnackBar();
-    if (!mounted) return;
-    setState(() => _aiBusy = false);
+    final result = await askAiWithStatus(
+      context,
+      instruction,
+      setBusy: (b) {
+        if (mounted) setState(() => _aiBusy = b);
+      },
+      ask: () async {
+        await mailStore.ensureBody(mail); // 本文の全文がまだなら先に取る
+        return ClaudeService.askAboutMail(mail: mail, instruction: instruction);
+      },
+    );
+    if (result == null || !mounted) return;
 
     // 結果に合わせて、入力済みの画面を開く（保存・送信は自分で押す）
     switch (result) {
-      case AiEvent r:
-        showAddEventSheet(context, mail,
-            title: r.title,
-            date: r.date,
-            time: r.time,
-            endDate: r.endDate,
-            endTime: r.endTime,
-            allDay: (r.allDay ?? false) || r.time == null,
-            location: r.location,
-            note: r.note);
-      case AiTask r:
-        showAddTaskSheet(context, mail, title: r.title, due: r.due, note: r.note);
-      case AiMemo r:
-        showAddMemoSheet(context, mail, title: r.title, body: r.body);
       case AiReply r:
         Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => ReplyScreen(original: mail, initialDraft: r.body),
         ));
-      case AiNewMail r:
-        await openNewMailFromAi(context, r);
-      case AiAnswer r:
-        showAiAnswer(context, instruction, r.text);
-      case AiDeleteEvent _ || AiTaskUpdate _ || AiTaskComplete _ || AiTaskDelete _ || AiMemoUpdate _ || AiMemoDelete _:
-        showAiAnswer(context, instruction, '予定・タスク・メモの変更や削除は、それぞれの画面から頼んでください。');
+      case AiLink r:
+        await runLinkAi(context, r, mail: mail);
+      default:
+        await handleCommonAiResult(context, instruction, result, mail: mail);
     }
   }
 
@@ -258,7 +295,9 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
   }
 
   /// メールを削除（ゴミ箱へ）。本文画面を閉じたあとの一覧の画面に「元に戻す」付きのお知らせを出す
-  void _delete(BuildContext context) {
+  Future<void> _delete(BuildContext context) async {
+    // 予定・タスクにリンクしているメールは、削除してよいか確かめる（2026-11-19）
+    if (!await confirmDeleteLinkedMail(context, mail) || !context.mounted) return;
     // 画面を閉じると context が使えなくなるので、お知らせの出し先を先に取っておく
     final messenger = ScaffoldMessenger.of(context);
     final target = mail;
@@ -334,6 +373,8 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
               ),
             ],
           ),
+          // このメールにリンクしている予定・タスク（ボタンのすぐ下。2026-11-19）
+          MailBacklinkSection(mailId: mail.id, subject: mail.subject),
           const Divider(height: 32),
           if (!mail.bodyLoaded) const LinearProgressIndicator(),
           if (mail.html != null && mail.html!.length > _maxHtml && !_showLargeHtml)
@@ -342,24 +383,13 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
             _htmlBody(mail.html!)
           else
             SelectableText(mail.body, style: theme.textTheme.bodyLarge?.copyWith(height: 1.6)),
-          // 添付ファイルの一覧（表示だけ。転送するときに一緒に送れる）
+          // 添付ファイルの一覧。決めた種類だけタップで外部アプリで開く（2026-11-19）。
+          // 開けない種類は薄く表示し、タップすると理由を案内する。転送するときに一緒に送れる
           if (mail.attachments.isNotEmpty) ...[
             const Divider(height: 32),
             Text('添付ファイル（${mail.attachments.length}）', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            for (final a in mail.attachments)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.attach_file, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(a.filename, style: theme.textTheme.bodyMedium)),
-                    const SizedBox(width: 8),
-                    Text(a.sizeText, style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
+            for (final a in mail.attachments) _attachmentTile(theme, a),
           ],
         ],
       ),
@@ -374,6 +404,29 @@ class _MailDetailScreenState extends State<MailDetailScreen> {
       ),
     );
   }
+}
+
+/// 表のマス（td・th）の style から、display:block／inline-block とピクセルで決めた幅を外す（2026-11-19）。
+/// メールのひな形には「td に display:block; width:580px」と書くものがあり、
+/// HTMLの表示部品がそのマスを表のマスとして扱えず、本文が丸ごと表示されないことがあったため
+/// （HANA TAXI の予約確認メールで発生）。display:none は残す
+String fixHtmlTableCells(String html) {
+  final display = RegExp(r'(^|;)\s*display\s*:\s*(block|inline-block)\s*(!important)?\s*(?=;|$)', caseSensitive: false);
+  final width = RegExp(r'(^|;)\s*(max-|min-)?width\s*:\s*[\d.]+px\s*(!important)?\s*(?=;|$)', caseSensitive: false);
+  final styleAttr = RegExp(r"""(style\s*=\s*)("[^"]*"|'[^']*')""", caseSensitive: false);
+  return html.replaceAllMapped(RegExp(r'<(td|th)\b[^>]*>', caseSensitive: false), (tag) {
+    return tag[0]!.replaceFirstMapped(styleAttr, (m) {
+      final v = m[2]!;
+      final q = v[0];
+      final css = v
+          .substring(1, v.length - 1)
+          .replaceAllMapped(display, (x) => x[1]!)
+          .replaceAllMapped(width, (x) => x[1]!)
+          .replaceAll(RegExp(r';{2,}'), ';')
+          .replaceAll(RegExp(r'^;|;$'), '');
+      return '${m[1]}$q$css$q';
+    });
+  });
 }
 
 /// HTMLメールから文字色・背景色の指定を外す（ダークモードで暗く表示するため）

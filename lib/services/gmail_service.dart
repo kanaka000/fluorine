@@ -75,6 +75,40 @@ class GmailService {
     return (changed: changed, historyId: latest);
   }
 
+  /// IDで1通を取る（受信トレイ以外・ゴミ箱も）。完全に消えていれば null（メールのリンク用。2026-11-19）
+  Future<Mail?> fetchById(String id) async {
+    try {
+      final m = await _api.users.messages
+          .get('me', id, format: 'metadata', metadataHeaders: ['From', 'To', 'Cc', 'Subject', 'Message-ID', 'References']);
+      return _toMail(m);
+    } on DetailedApiRequestError catch (e) {
+      if (e.status == 404 || e.status == 400) return null;
+      rethrow;
+    }
+  }
+
+  /// メールを探す（アーカイブも含めた全部。ゴミ箱・迷惑メールは除く。2026-11-19）。
+  /// 新しい順に [max] 通まで。添付ファイルの名前も一緒に取る（本文の中身は取らない）
+  Future<List<Mail>> search(String query, {int max = 50}) async {
+    final list = await _api.users.messages.list('me', q: query, maxResults: max);
+    final ids = (list.messages ?? []).map((m) => m.id!).toList();
+    // 見出しと、添付の名前・大きさ・IDだけを受け取る（本文のデータは受け取らない）
+    const part = 'filename,mimeType,headers,body(size,attachmentId)';
+    const fields = 'id,threadId,labelIds,snippet,internalDate,'
+        'payload(headers,$part,parts($part,parts($part,parts($part))))';
+    final result = <Mail>[];
+    for (var i = 0; i < ids.length; i += 10) {
+      final chunk = ids.skip(i).take(10);
+      final msgs = await Future.wait(chunk.map((id) => _api.users.messages.get('me', id, format: 'full', $fields: fields)));
+      for (final m in msgs) {
+        final mail = _toMail(m);
+        mail.attachments = _findAttachments(m.payload);
+        result.add(mail);
+      }
+    }
+    return result;
+  }
+
   /// 1通の最新の状態を取る。削除済み（見つからない）なら null。
   /// 受信トレイにある（ゴミ箱・迷惑メールではない）なら Mail、そうでなければ inInbox=false
   Future<({Mail? mail, bool inInbox})> fetchState(String id) async {
