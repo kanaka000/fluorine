@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/calendar_store.dart';
@@ -7,6 +7,7 @@ import '../widgets/ai_prompt.dart';
 import '../widgets/calendar_ai.dart';
 import '../widgets/header_actions.dart';
 import '../widgets/links/links.dart';
+import '../widgets/event_note.dart';
 
 /// 予定の詳細（カレンダーの一覧で予定をタップすると開く）
 class EventDetailScreen extends StatefulWidget {
@@ -129,7 +130,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           if (note.isNotEmpty) ...[
             const Divider(height: 24),
-            SelectableText(note, style: theme.textTheme.bodyLarge?.copyWith(height: 1.6)),
+            EventNoteView(note: note), // 書式付き（HTML）なら書式を再現、リンクはタップで開く（2026-11-22）
           ],
           MemoLinkSection(links: e.memoLinks, onChanged: _saveLinks),
           MailLinkSection(links: e.mailLinks, onChanged: _saveMailLinks),

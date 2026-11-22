@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../data/app_settings.dart';
@@ -112,8 +112,7 @@ class _InstructionSheetState extends State<_InstructionSheet> {
         setState(() => _heard = r.recognizedWords);
         if (r.finalResult) _finish(r.recognizedWords);
       },
-      localeId: 'ja_JP',
-      listenOptions: SpeechListenOptions(partialResults: true, listenMode: ListenMode.dictation),
+      listenOptions: SpeechListenOptions(localeId: 'ja_JP', partialResults: true, listenMode: ListenMode.dictation),
     );
   }
 

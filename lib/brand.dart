@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// アプリの見た目のうち、起動画面の色とアイコン

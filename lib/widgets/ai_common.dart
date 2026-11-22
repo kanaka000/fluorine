@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
 import '../services/claude_service.dart';
@@ -69,5 +69,7 @@ Future<void> handleCommonAiResult(
       showAiAnswer(context, instruction, 'リンクは、$openHintを開いてから✨で頼んでください。');
     case AiMailSearch _:
       showAiAnswer(context, instruction, 'メールを探すのは、メールのトップ画面の✨から頼んでください。');
+    case AiOpenMail _:
+      showAiAnswer(context, instruction, 'メールを開くのは、メモを開いてから✨で頼んでください。');
   }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'data/app_settings.dart';
 import 'data/memo_store.dart';
@@ -53,6 +53,11 @@ class FluorineApp extends StatelessWidget {
         locale: const Locale('ja'),
         supportedLocales: const [Locale('ja')],
         localizationsDelegates: jaLocalizationsDelegates,
+        // まだ旧 material（package:flutter/material.dart）を使っているパッケージ（HTML表示・カレンダー・Markdown）にも、
+        // テーマと日本語表示を渡す（2026-11-22 の18。material_ui への移行）
+        // つなぎは移行のあいだだけの部品なので「非推奨」と出る。各パッケージが material_ui に移ったら外す
+        // ignore: deprecated_member_use
+        builder: (context, child) => MaterialUiCompatibilityBridge(child: child!),
         // 起動の準備が終わるまではスプラッシュ画面、終わったらメールのトップ画面
         home: ValueListenableBuilder<bool>(
           valueListenable: startupDone,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../data/app_nav.dart';
 import '../../data/app_settings.dart';
@@ -8,6 +8,7 @@ import '../timed_snack.dart';
 import '../../services/errors.dart';
 import '../../util/date_text.dart';
 import 'sheet_common.dart';
+import '../../util/html_text.dart';
 
 // 予定の追加・変更シート
 
@@ -124,7 +125,15 @@ class _EventForm extends StatefulWidget {
 class _EventFormState extends State<_EventForm> {
   late final _title = TextEditingController(text: widget.draft.title);
   late final _location = TextEditingController(text: widget.draft.location ?? '');
-  late final _note = TextEditingController(text: widget.draft.note ?? '');
+  // 書式付き（HTML）のメモ欄（2026-11-22 の11）：欄には記号を外した文字を出し、
+  // 直さずに保存したら元の HTML のまま、直したら書式のない文字で保存する
+  late final String? _noteHtml =
+      looksLikeHtml(widget.editing?.note ?? '') ? widget.editing!.note!.trim() : null;
+  late final String? _noteHtmlText = _noteHtml == null ? null : eventNoteText(_noteHtml, keepLinks: true);
+  late final _note = TextEditingController(
+      text: looksLikeHtml(widget.draft.note ?? '')
+          ? eventNoteText(widget.draft.note, keepLinks: true)
+          : (widget.draft.note ?? ''));
   late bool _allDay = widget.draft.allDay;
   late DateTime _start = widget.draft.start;
 
@@ -229,7 +238,7 @@ class _EventFormState extends State<_EventForm> {
       start: _start,
       end: end,
       allDay: _allDay,
-      note: _note.text.trim(),
+      note: (_noteHtml != null && _note.text.trim() == _noteHtmlText!.trim()) ? _noteHtml : _note.text.trim(),
       location: _location.text.trim(),
     );
     try {
@@ -293,7 +302,11 @@ class _EventFormState extends State<_EventForm> {
           controller: _note,
           minLines: 2,
           maxLines: 5,
-          decoration: const InputDecoration(labelText: 'メモ'),
+          decoration: InputDecoration(
+            labelText: 'メモ',
+            helperText: _noteHtml == null ? null : 'パソコンで付けた書式があります。メモを直すと、書式のない文字で保存されます',
+            helperMaxLines: 2,
+          ),
         ),
         if (_error != null) ...[
           const SizedBox(height: 8),

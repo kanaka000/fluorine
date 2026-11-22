@@ -313,3 +313,36 @@ const deleteMemoTool = {
     'properties': {'number': memoNumberProp},
   },
 };
+
+/// メールを開いて表示する（メモの詳細画面の✨。2026-11-22）。
+/// AIは「元のメールのことか」と手がかりを返すだけで、探して開くのはアプリ
+const openMailTool = {
+  'name': 'open_mail',
+  'description': 'メールを開いて、メールの画面に表示する（「元のメールを表示して」「このメモの元になったメールを開いて」'
+      '「田中さんの見積もりのメールを見せて」など）。探すのはアプリで、見つかったメールの画面を開く。',
+  'input_schema': {
+    'type': 'object',
+    'properties': {
+      'from_source': {
+        'type': 'boolean',
+        'description': '選んでいるメモの元になったメール（本文の「メール：件名」の行のメール）のことなら true',
+      },
+      'keyword': {
+        'type': 'string',
+        'description': '元になったメール以外を開くときの、件名・本文に含まれそうな言葉（短く1〜2語。'
+            '「メール」「の」などは付けない）。指示に手がかりの言葉がなければ省略',
+      },
+      'sender': {
+        'type': 'string',
+        'description': '元になったメール以外を開くときの、差出人の名前かメールアドレス（さん・様などの敬称なし）。指示にあるときだけ',
+      },
+      'date': {
+        'type': 'string',
+        'description': '元になったメール以外を開くときの、受け取った日 YYYY-MM-DD（指示に日付があるときだけ）',
+      },
+    },
+  },
+};
+
+const aiOpenMailRule = 'メールを表示する・開く・見せるよう頼まれたら、件名などを答えるのではなく open_mail を使ってください'
+    '（メモの元になったメールなら from_source を true に）。';

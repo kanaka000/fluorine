@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ✨の結果の型と、Claudeの返事から結果を作る部分（2026-11-19 の整理で分けた）
 
@@ -103,6 +103,13 @@ AiResult aiResultFrom(({String? name, Map<String, dynamic> input, String text}) 
         fileType: aiOptStr(input, 'file_type'),
         dateFrom: aiDate(input['date_from']),
         dateTo: aiDate(input['date_to']),
+      );
+    case 'open_mail':
+      return AiOpenMail(
+        fromSource: input['from_source'] == true,
+        keyword: aiOptStr(input, 'keyword'),
+        sender: aiOptStr(input, 'sender'),
+        date: aiDate(input['date']),
       );
     case 'answer':
       return AiAnswer(str('text'));
@@ -241,4 +248,14 @@ class AiMailSearch extends AiResult {
   final String? fileType;
   final DateTime? dateFrom;
   final DateTime? dateTo;
+}
+
+/// メールを開いて表示する（2026-11-22。メモの詳細画面の✨）。
+/// [fromSource] が true ならメモの元になったメール。探して開くのはアプリ
+class AiOpenMail extends AiResult {
+  AiOpenMail({this.fromSource = false, this.keyword, this.sender, this.date});
+  final bool fromSource;
+  final String? keyword;
+  final String? sender;
+  final DateTime? date;
 }

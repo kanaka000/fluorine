@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 下部タブの番号（0:メール 1:カレンダー 2:タスク 3:メモ）
 /// どの画面からでも tabIndex.value = 1 のようにしてタブを切り替えられる

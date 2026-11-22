@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 
 import '../data/app_settings.dart';
@@ -18,6 +18,7 @@ import '../widgets/safe_link.dart';
 import '../widgets/sender_avatar.dart';
 import '../widgets/timed_snack.dart';
 import 'reply_screen.dart';
+import '../util/html_text.dart';
 import '../services/attachment_opener.dart';
 
 /// ③ メール本文
@@ -429,24 +430,4 @@ String fixHtmlTableCells(String html) {
   });
 }
 
-/// HTMLメールから文字色・背景色の指定を外す（ダークモードで暗く表示するため）
-/// style属性・<style>の中の color／background／background-color と、bgcolor・color 属性を取り除く
-String stripHtmlColors(String html) {
-  final colorDecl = RegExp(
-      r'(?<![-\w])(background-color|background|color)\s*:\s*[^;"\x27}]*(;|(?=["\x27}]))',
-      caseSensitive: false);
-  var s = html.replaceAllMapped(
-    RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false),
-    (m) => m[0]!.replaceAll(colorDecl, ''),
-  );
-  s = s.replaceAllMapped(
-    RegExp(r'(style\s*=\s*)("[^"]*"|\x27[^\x27]*\x27)', caseSensitive: false),
-    (m) => '${m[1]}${m[2]!.replaceAll(colorDecl, '')}',
-  );
-  s = s.replaceAllMapped(
-    RegExp(r'<[a-zA-Z][^>]*>'),
-    (m) => m[0]!.replaceAll(
-        RegExp(r'\s(bgcolor|color)\s*=\s*("[^"]*"|\x27[^\x27]*\x27|[^\s>]+)', caseSensitive: false), ''),
-  );
-  return s;
-}
+// stripHtmlColors は util/html_text.dart に移した（2026-11-22）

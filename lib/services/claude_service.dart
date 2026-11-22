@@ -1,13 +1,11 @@
-import '../data/calendar_store.dart';
-import '../data/memo_store.dart';
 import '../data/models.dart';
-import '../data/task_store.dart';
 import 'errors.dart';
 import '../util/date_text.dart';
 import 'ai/claude_client.dart';
 import 'ai/ai_tools.dart';
 import 'ai/ai_context.dart';
 import 'ai/ai_results.dart';
+import '../util/html_text.dart';
 
 export 'ai/ai_results.dart';
 
@@ -24,12 +22,12 @@ class ClaudeService {
     bool forward = false,
   }) async {
     checkClaudeKey();
-    final system = (forward
-            ? 'あなたはメールの転送に添えるメッセージの下書きを手伝うアシスタントです。'
-                '元のメールは自動で下に付くので、ユーザーの指示に従い、転送先の相手に向けて添える文だけを出力してください。'
-            : 'あなたはメールの返信の下書きを手伝うアシスタントです。'
-                'ユーザーの指示に従い、返信メールの本文だけを出力してください。') +
-        '件名・宛先・前置き・説明・引用（>）・署名は出力しないでください。'
+    final lead = forward
+        ? 'あなたはメールの転送に添えるメッセージの下書きを手伝うアシスタントです。'
+            '元のメールは自動で下に付くので、ユーザーの指示に従い、転送先の相手に向けて添える文だけを出力してください。'
+        : 'あなたはメールの返信の下書きを手伝うアシスタントです。'
+            'ユーザーの指示に従い、返信メールの本文だけを出力してください。';
+    final system = '$lead件名・宛先・前置き・説明・引用（>）・署名は出力しないでください。'
         '元のメールが日本語なら日本語で、それ以外の言語ならその言語で書いてください。'
         '今の下書きがある場合は、それを指示に従って書き直してください。'
         '指示が音声入力のため誤変換を含むことがあるので、文脈から意図をくみ取ってください。';
@@ -203,7 +201,8 @@ class ClaudeService {
     final list = [for (var i = 0; i < shown.length; i++) '- [${i + 1}] ${describeEvent(shown[i])}'].join('\n');
     final buf = StringBuffer();
     if (selected != null) {
-      var note = (selected.note ?? '').trim();
+      // 書式付き（HTML）のメモ欄は記号を外し、リンクは「文字（URL）」で渡す（2026-11-22）
+      var note = eventNoteText(selected.note, keepLinks: true);
       if (note.length > 3000) note = '${note.substring(0, 3000)}（以下省略）';
       buf
         ..writeln('## 選んでいる予定')
@@ -371,7 +370,7 @@ class ClaudeService {
         '削除はユーザーが確認画面で決めます。変更や新しいメモも、ユーザーが確認してから保存します。'
         '質問（要約、○○のメモはどれ？など）には answer で答えてください。'
         '新しい予定を頼まれたら create_event を使ってください。'
-        '${selected != null ? aiLinkRule : ''}'
+        '${selected != null ? '$aiLinkRule$aiOpenMailRule' : ''}'
         '$memoMarkdownRule'
         '指示は音声入力のため誤変換を含むことがあるので、文脈から意図をくみ取ってください。'
         '$aiCrossRule';
@@ -392,7 +391,7 @@ class ClaudeService {
         ..writeln();
     }
     buf
-      ..writeln('## メモの一覧（更新日時の新しい順）')
+      ..writeln('## メモの一覧（一覧の画面の並び順）')
       ..writeln(shown.isEmpty
           ? '（メモはありません）'
           : [for (var i = 0; i < shown.length; i++) '- [${i + 1}] ${shown[i].title}：${head(shown[i].body)}'].join('\n'))
@@ -409,6 +408,7 @@ class ClaudeService {
         updateMemoTool,
         deleteMemoTool,
         if (selected != null) linkTool(const ['event', 'task']),
+        if (selected != null) openMailTool,
         createTaskTool,
         createEventTool,
         draftNewMailTool,

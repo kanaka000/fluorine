@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../data/mail_store.dart';
 import '../data/models.dart';
@@ -110,7 +110,7 @@ class _MailSearchScreenState extends State<MailSearchScreen> {
       listenable: mailStore,
       builder: (context, _) => ListView.separated(
         itemCount: mails.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, i) => _tile(theme, mails[i]),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../data/models.dart';
 import 'errors.dart';
+import '../util/html_text.dart';
 
 /// Gmail APIとのやり取り
 class GmailService {
@@ -408,7 +409,7 @@ class GmailService {
     );
   }
 
-  /// 「山田 太郎 <taro@example.com>」→（山田 太郎, taro@example.com）
+  /// 「`山田 太郎 <taro@example.com>`」→（山田 太郎, taro@example.com）
   (String, String) _parseFrom(String from) {
     final match = RegExp(r'^\s*"?(.*?)"?\s*<([^>]+)>\s*$').firstMatch(from);
     if (match != null) {
@@ -435,48 +436,10 @@ class GmailService {
   String _decodeBase64(String data) =>
       utf8.decode(base64Url.decode(base64Url.normalize(data)), allowMalformed: true);
 
-  /// HTMLから読める文字だけを取り出す（AIに渡す本文・引用に使う）
-  String _htmlToText(String html) {
-    var s = html
-        .replaceAll(RegExp(r'<!--[\s\S]*?-->'), '')
-        .replaceAll(RegExp(r'<head[^>]*>[\s\S]*?</head>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'<(style|script|title)[^>]*>[\s\S]*?</\1>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'[\r\n]+'), ' ') // HTMLの改行は表示上の改行ではない
-        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'</(p|div|tr|li|h\d|table|blockquote)>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'</(td|th)>', caseSensitive: false), ' ')
-        .replaceAll(RegExp(r'<[^>]+>'), '');
-    s = _decodeEntities(s);
-    s = s
-        .split('\n')
-        .map((line) => line.replaceAll(RegExp(r'[ \t\u00A0\u3000]+'), ' ').trim())
-        .join('\n');
-    return s.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
-  }
+  /// HTMLから読める文字だけを取り出す（AIに渡す本文・引用に使う。中身は util/html_text.dart に移した＝2026-11-22）
+  String _htmlToText(String html) => htmlToText(html);
 
-  String _decodeEntities(String s) => s
-      .replaceAllMapped(RegExp(r'&#[xX]([0-9a-fA-F]+);'),
-          (m) => _charOf(int.tryParse(m[1]!, radix: 16)) ?? m[0]!)
-      .replaceAllMapped(RegExp(r'&#(\d+);'), (m) => _charOf(int.tryParse(m[1]!)) ?? m[0]!)
-      .replaceAll('&nbsp;', ' ')
-      .replaceAll('&yen;', '¥')
-      .replaceAll('&copy;', '©')
-      .replaceAll('&reg;', '®')
-      .replaceAll('&hellip;', '…')
-      .replaceAll('&mdash;', '—')
-      .replaceAll('&ndash;', '–')
-      .replaceAll('&rarr;', '→')
-      .replaceAll('&apos;', "'")
-      .replaceAll('&lt;', '<')
-      .replaceAll('&gt;', '>')
-      .replaceAll('&quot;', '"')
-      .replaceAll('&#39;', "'")
-      .replaceAll('&amp;', '&');
-
-  String? _charOf(int? code) {
-    if (code == null || code <= 0 || code > 0x10FFFF) return null;
-    return String.fromCharCode(code);
-  }
+  String _decodeEntities(String s) => decodeHtmlEntities(s);
 }
 
 /// メールの見出しに送れない文字があったときのエラー（2026-11-18）

@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as legacy show Theme;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'safe_link.dart';
@@ -116,7 +118,9 @@ class MemoMarkdown extends StatelessWidget {
       selectable: true,
       // 1回の改行もそのまま改行として表示する（今までのメモの見た目を保つ）
       softLineBreak: true,
-      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+      // flutter_markdown_plus はまだ旧 material の ThemeData を受け取るので、旧 material のテーマを渡す
+      // （MaterialUiCompatibilityBridge が中身を用意している。2026-11-22 の18）
+      styleSheet: MarkdownStyleSheet.fromTheme(legacy.Theme.of(context)).copyWith(
         p: text,
         listBullet: text,
         h1: theme.textTheme.headlineSmall,

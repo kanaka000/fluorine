@@ -3,7 +3,7 @@ import 'models.dart';
 /// メールアドレス1件（名前とアドレス）
 typedef MailAddress = ({String name, String address});
 
-/// 「山田 太郎 <taro@example.com>」→（山田 太郎, taro@example.com）。アドレスでなければ null
+/// 「`山田 太郎 <taro@example.com>`」→（山田 太郎, taro@example.com）。アドレスでなければ null
 MailAddress? parseAddress(String s) {
   final m = RegExp(r'^\s*"?(.*?)"?\s*<([^>]+)>\s*$').firstMatch(s);
   if (m != null) return (name: m.group(1)!.trim(), address: m.group(2)!.trim().toLowerCase());

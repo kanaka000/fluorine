@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../data/app_settings.dart';
 import '../../data/calendar_store.dart';
@@ -41,7 +41,8 @@ String aiReferenceInfo({
       ..writeln();
   }
   if (memos) {
-    final list = memoStore.memos.take(40).toList();
+    // 参考情報は今までどおり更新の新しいもの40件（一覧は自分で並べた順になったため、ここで並べ直す）
+    final list = ([...memoStore.memos]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt))).take(40).toList();
     buf
       ..writeln('### メモ（新しい順）')
       ..writeln(list.isEmpty ? '（なし）' : list.map((m) => '- ${m.title}：${head(m.body, 80)}').join('\n'))

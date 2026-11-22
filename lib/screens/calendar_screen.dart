@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../data/app_settings.dart';
@@ -15,6 +15,7 @@ import '../widgets/links/links.dart';
 import 'event_detail_screen.dart';
 import 'settings_screen.dart';
 import '../util/date_text.dart';
+import '../util/html_text.dart';
 
 /// カレンダー（ログイン後はGoogleカレンダーの予定。期間は「カレンダーの設定」で変えられる）
 /// 表示は2種類：スケジュールの一覧／月のカレンダー（上）＋選んだ日の予定（下）。右上のボタンで切り替える
@@ -101,7 +102,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       );
     }
     final place = (e.location ?? '').trim();
-    final note = (e.note ?? '').trim();
+    final note = eventNoteText(e.note); // 書式付き（HTML）は記号を外す（2026-11-22）
     final sub = [if (place.isNotEmpty) '📍 $place', if (note.isNotEmpty) note].join('\n');
     return ListTile(
       leading: SizedBox(width: 48, child: time),

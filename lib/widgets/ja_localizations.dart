@@ -1,19 +1,17 @@
-// MaterialLocalizationJa は material_ui パッケージへの移行で「非推奨」になっているが、
-// このアプリは flutter/material.dart を使っているので、こちらを使う
-// ignore_for_file: deprecated_member_use
+// 日本語表示（2026-11-22 の18）：MaterialLocalizationJa・GlobalMaterialLocalizations は material_ui のものを使う
+// （flutter_localizations から material_ui に移った）
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:material_ui/material_ui.dart';
 
 import '../data/app_settings.dart';
 
 /// アプリの表示を日本語にする（日付選択・時刻選択など）。
 /// 週の始まり（日曜／月曜）だけは「カレンダーの設定」に合わせる
 final jaLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
-  _JaMaterialLocalizationsDelegate(),
-  GlobalWidgetsLocalizations.delegate,
-  GlobalCupertinoLocalizations.delegate,
+  const _JaMaterialLocalizationsDelegate(),
+  // 残り（ウィジェット・Cupertino など）は標準のもの。同じ種類は先に並べたもの（上の日本語）が使われる
+  ...GlobalMaterialLocalizations.delegates,
 ];
 
 class _JaMaterialLocalizationsDelegate extends LocalizationsDelegate<MaterialLocalizations> {

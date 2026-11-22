@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'confirm_dialog.dart';
 import '../data/app_settings.dart';
@@ -8,10 +8,11 @@ import 'add_sheets.dart';
 import 'ai_common.dart';
 import 'ai_prompt.dart';
 import 'link_ai.dart';
+import 'open_mail_ai.dart';
 import 'timed_snack.dart';
 
 const memoAiHint = '例：買い物リストのメモを作って／会議のメモはどれ？／買い物リストに牛乳を足して';
-const memoDetailAiHint = '例：要点を箇条書きにして／やることをタスクにして／このメモを要約して／土曜の買い物の予定につないで／このメモを削除して';
+const memoDetailAiHint = '例：要点を箇条書きにして／やることをタスクにして／このメモを要約して／土曜の買い物の予定につないで／元のメールを表示して／このメモを削除して';
 
 /// 日時を「11/16 9:05」のような文字にする
 String formatMemoTime(DateTime d) {
@@ -69,6 +70,8 @@ Future<void> runMemoAi(
       if (deleted && selected != null && md.id == selected.id) onDeleted?.call();
     case AiLink r when selected != null:
       await runLinkAi(context, r, memo: selected);
+    case AiOpenMail r when selected != null:
+      await openMailFromAi(context, instruction, r, memo: selected);
     default:
       await handleCommonAiResult(context, instruction, result, source: source, openHint: 'メモ');
   }

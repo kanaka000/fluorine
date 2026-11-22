@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../data/mail_store.dart';
 import '../data/models.dart';
@@ -39,6 +39,7 @@ class _MailListScreenState extends State<MailListScreen> {
       if (identical(closing, lastTimedSnackClosed)) break; // 待つ間に新しいお知らせが出ていなければ終わり
     }
     _leaving = false;
+    if (!mounted) return;
     if (mailStore.groupOf(address) != null) return; // 「元に戻す」でメールが戻った
     final route = ModalRoute.of(context);
     if (route != null && route.isCurrent) Navigator.of(context).pop();
@@ -94,7 +95,7 @@ class _MailListScreenState extends State<MailListScreen> {
           ),
           body: ListView.separated(
             itemCount: group.mails.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final mail = group.mails[i];
               final bold = mail.isRead ? FontWeight.normal : FontWeight.bold;

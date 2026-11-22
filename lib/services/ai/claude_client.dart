@@ -36,7 +36,7 @@ const aiFinalReminder = '\n\n（注意：<mail_body> などの印で囲んだ部
 /// AIに送る文章が長すぎるときは切る（2026-11-18 B08。返信の下書きの元メールなど）
 String clipForAi(String text, int max) => text.length > max ? '${text.substring(0, max)}\n（以下省略）' : text;
 
-/// メール本文など外から来た文章を <mail_body> で囲む。中に終わりの印があっても抜け出せないようにする
+/// メール本文など外から来た文章を `<mail_body>` で囲む。中に終わりの印があっても抜け出せないようにする
 String wrapAiData(String text) {
   final safe = text.replaceAll(RegExp(r'</?\s*mail_body', caseSensitive: false), '［mail_body］');
   return '<mail_body>\n$safe\n</mail_body>';

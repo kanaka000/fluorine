@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 「やめる」と実行ボタンの確認ダイアログ。実行を押したら true（2026-11-19 の整理で共通化）
 Future<bool> askConfirm(

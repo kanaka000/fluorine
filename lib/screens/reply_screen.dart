@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -9,6 +9,7 @@ import '../services/claude_service.dart';
 import '../services/google_auth.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/format.dart';
+import '../widgets/recipient_field.dart';
 import '../widgets/timed_snack.dart';
 import '../services/errors.dart';
 
@@ -129,8 +130,7 @@ class _ReplyScreenState extends State<ReplyScreen> {
     setState(() => _listening = true);
     await _speech.listen(
       onResult: _onSpeechResult,
-      localeId: 'ja_JP',
-      listenOptions: SpeechListenOptions(partialResults: true, listenMode: ListenMode.dictation),
+      listenOptions: SpeechListenOptions(localeId: 'ja_JP', partialResults: true, listenMode: ListenMode.dictation),
     );
   }
 
@@ -166,8 +166,7 @@ class _ReplyScreenState extends State<ReplyScreen> {
           _askClaude(r.recognizedWords);
         }
       },
-      localeId: 'ja_JP',
-      listenOptions: SpeechListenOptions(partialResults: true, listenMode: ListenMode.dictation),
+      listenOptions: SpeechListenOptions(localeId: 'ja_JP', partialResults: true, listenMode: ListenMode.dictation),
     );
   }
 
@@ -395,27 +394,23 @@ class _ReplyScreenState extends State<ReplyScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Row(
-                      children: [
-                        Text(_forward ? '転送先: ' : '宛先: ', style: theme.textTheme.bodySmall),
-                        Expanded(
-                          child: _needsTo
-                              ? TextField(
-                                  controller: _toController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  autocorrect: false,
-                                  style: theme.textTheme.bodyMedium,
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    hintText: 'メールアドレス（複数はカンマ区切り）',
-                                  ),
-                                )
-                              : Text('${mail!.senderName} <${mail.senderAddress}>',
-                                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall),
-                        ),
-                      ],
-                    ),
+                    // 宛先の候補（2026-11-22 の10）は RecipientField が出す
+                    child: _needsTo
+                        ? RecipientField(
+                            label: _forward ? '転送先: ' : '宛先: ',
+                            controller: _toController,
+                            hintText: 'メールアドレス（複数はカンマ区切り）',
+                          )
+                        : Row(
+                            children: [
+                              Text('宛先: ', style: theme.textTheme.bodySmall),
+                              Expanded(
+                                child: Text('${mail!.senderName} <${mail.senderAddress}>',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall),
+                              ),
+                            ],
+                          ),
                   ),
                   // 転送：元メールの添付（タップで付ける／外す）
                   if (_forward && mail != null && mail.attachments.isNotEmpty)
@@ -445,22 +440,10 @@ class _ReplyScreenState extends State<ReplyScreen> {
                   if (_replyAll)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                      child: Row(
-                        children: [
-                          Text('CC: ', style: theme.textTheme.bodySmall),
-                          Expanded(
-                            child: TextField(
-                              controller: _ccController,
-                              keyboardType: TextInputType.emailAddress,
-                              autocorrect: false,
-                              style: theme.textTheme.bodyMedium,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                hintText: 'なし（複数はカンマ区切り）',
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: RecipientField(
+                        label: 'CC: ',
+                        controller: _ccController,
+                        hintText: 'なし（複数はカンマ区切り）',
                       ),
                     ),
                   if (_newMail)

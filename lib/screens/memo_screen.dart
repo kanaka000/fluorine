@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../data/app_settings.dart';
 import '../data/memo_store.dart';
@@ -12,7 +12,7 @@ import '../widgets/timed_snack.dart';
 import 'memo_detail_screen.dart';
 import 'settings_screen.dart';
 
-/// メモ（端末内に保存。更新日時の新しい順に、色付きのカードで表示）
+/// メモ（端末内に保存。自分で並べた順に、色付きのカードで表示。長押しでドラッグして並べ替え）
 class MemoScreen extends StatefulWidget {
   const MemoScreen({super.key});
 
@@ -121,19 +121,23 @@ class _MemoScreenState extends State<MemoScreen> {
               child: Text('メモはありません\n右下の＋か、右上の ✨ で作れます', textAlign: TextAlign.center),
             );
           }
-          return ListView(
+          // 長押しして持ち上がったら上下にドラッグで並べ替え（2026-11-19 の19）
+          return ReorderableListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+            // onReorderItem の to は、動かすメモを取り出したあとの数え方（memoStore.move と同じ。2026-11-22 に onReorder から移した）
+            onReorderItem: (from, to) => memoStore.move(from, to),
             children: [
-              // 左右どちらかにスワイプすると削除（お知らせの「元に戻す」で戻せる）
+              // 左右どちらかにスワイプすると削除（お知らせの「元に戻す」で元の位置に戻せる）
               for (final m in memos)
                 Dismissible(
                   key: ValueKey(m.id),
                   background: _swipeBackground(theme, Alignment.centerLeft),
                   secondaryBackground: _swipeBackground(theme, Alignment.centerRight),
                   onDismissed: (_) {
+                    final at = memoStore.indexOf(m.id);
                     memoStore.remove(m);
                     showTimedSnack(context, 'メモを削除しました',
-                        actionLabel: '元に戻す', onAction: () => memoStore.add(m));
+                        actionLabel: '元に戻す', onAction: () => memoStore.add(m, at: at));
                   },
                   child: _memoCard(m, theme),
                 ),

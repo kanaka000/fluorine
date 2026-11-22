@@ -26,9 +26,12 @@ class ContactCandidate {
 
 /// 探した結果。[problem] は連絡先を読めなかったときの理由（受信メールからは探している）
 class ContactSearchResult {
-  const ContactSearchResult(this.list, {this.problem});
+  const ContactSearchResult(this.list, {this.problem, this.noPermission = false});
   final List<ContactCandidate> list;
   final String? problem;
+
+  /// 連絡先を読む許可がまだない（宛先の欄の候補で、許可画面を出さずに探したとき。2026-11-22）
+  final bool noPermission;
 }
 
 /// 名前からメールアドレスを探す（Googleの連絡先 → その他の連絡先 → 受信メールの送信元）
@@ -49,14 +52,7 @@ class ContactsService {
       if (headers == null) {
         problem = '連絡先を読む許可がないため、受信メールの送信元から探しました';
       } else {
-        if (!_warmedUp) {
-          // People API は、最初に空の検索をしてから探す決まり（内部の準備のため）
-          await Future.wait([
-            _get('people:searchContacts', '', headers),
-            _get('otherContacts:search', '', headers),
-          ]);
-          _warmedUp = true;
-        }
+        await _warmUp(headers);
         final results = await Future.wait([
           _get('people:searchContacts', name, headers),
           _get('otherContacts:search', name, headers),
@@ -77,11 +73,57 @@ class ContactsService {
     return ContactSearchResult(list, problem: problem);
   }
 
-  /// 連絡先を読むための認証ヘッダー。まだ許可していなければ許可画面を出す（断られたら null）
-  static Future<Map<String, String>?> _headers() async {
+  /// 宛先の欄の候補用（2026-11-22）：Googleの連絡先・その他の連絡先だけを探す。
+  /// まだ許可していなければ許可画面は出さず、noPermission を返す。失敗は空（打っている途中なので知らせない）
+  static Future<ContactSearchResult> searchContacts(String rawQuery) async {
+    final q = cleanName(rawQuery);
+    if (q.isEmpty) return const ContactSearchResult([]);
+    try {
+      final headers = await _headers(prompt: false);
+      if (headers == null) return const ContactSearchResult([], noPermission: true);
+      await _warmUp(headers);
+      final results = await Future.wait([
+        _get('people:searchContacts', q, headers),
+        _get('otherContacts:search', q, headers),
+      ]);
+      return ContactSearchResult([..._parse(results[0], '連絡先'), ..._parse(results[1], 'その他の連絡先')]);
+    } catch (e) {
+      devLog('連絡先の候補の検索に失敗: $e');
+      return const ContactSearchResult([]);
+    }
+  }
+
+  /// 連絡先を読む許可を求める（宛先の欄の「Googleの連絡先も探す」。2026-11-22）。許可されたら true
+  static Future<bool> requestPermission() async {
+    try {
+      return await _headers() != null;
+    } catch (e) {
+      devLog('連絡先の許可に失敗: $e');
+      return false;
+    }
+  }
+
+  /// 受信メールの送信元から候補を探す（通信なし。宛先の欄の候補用）
+  static List<ContactCandidate> fromMails(String query) {
+    final q = cleanName(query);
+    return q.isEmpty ? const [] : _fromMails(q);
+  }
+
+  /// People API は、最初に空の検索をしてから探す決まり（内部の準備のため）
+  static Future<void> _warmUp(Map<String, String> headers) async {
+    if (_warmedUp) return;
+    await Future.wait([
+      _get('people:searchContacts', '', headers),
+      _get('otherContacts:search', '', headers),
+    ]);
+    _warmedUp = true;
+  }
+
+  /// 連絡先を読むための認証ヘッダー。[prompt] なら、まだ許可していなければ許可画面を出す（断られたら null）
+  static Future<Map<String, String>?> _headers({bool prompt = true}) async {
     final u = googleAuth.user;
     if (u == null) return null;
-    return u.authorizationClient.authorizationHeaders(contactScopes, promptIfNecessary: true);
+    return u.authorizationClient.authorizationHeaders(contactScopes, promptIfNecessary: prompt);
   }
 
   static Future<Map<String, dynamic>> _get(String path, String query, Map<String, String> headers) async {

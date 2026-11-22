@@ -251,7 +251,7 @@ class NotionSync extends ChangeNotifier {
         try {
           res = await _request('GET', '/v1/blocks/$parentId/children', null, {
             'page_size': '100',
-            if (cursor != null) 'start_cursor': cursor,
+            'start_cursor': ?cursor,
           });
         } on _NotFound {
           throw NotionException('保存先のページが見つかりません。NOTION_PAGE_ID と、'
@@ -437,9 +437,9 @@ String toNotionMarkdown(String body) {
 }
 
 /// Notionから読み出したMarkdown（v2）を、アプリのメモの本文に戻す（2026-11-18。復元用）
-/// - <todo checked="…">…</todo> → 「- [ ] …」「- [x] …」
-/// - <p />・<empty-block/>（空の段落）→ 空行、<br>・行末の \ → 改行、\< → <
-/// - 色の付いた見出し・段落・文字（<h2 color=…>・<p color=…>・<span color=…>）は色を外す
+/// - `<todo checked="…">…</todo>` → 「- [ ] …」「- [x] …」
+/// - `<p />`・`<empty-block/>`（空の段落）→ 空行、`<br>`・行末の `\` → 改行、`\<` → `<`
+/// - 色の付いた見出し・段落・文字（`<h2 color=…>`・`<p color=…>`・`<span color=…>`）は色を外す
 /// - 入れ子のタブ → 空白2つ
 /// - 送るときに補った空行（toNotionMarkdown）を外す。空行が2つ以上続くところは1つ残す。コードの中はそのまま
 /// （JavaScriptに写して試験済み）

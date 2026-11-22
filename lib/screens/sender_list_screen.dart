@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../data/app_nav.dart';
 import '../data/app_settings.dart';
@@ -175,7 +175,7 @@ class _SenderListScreenState extends State<SenderListScreen> with RouteAware {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(bottom: 88), // 「作成」ボタンに最後の行が隠れないように
                     itemCount: groups.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                    separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
                     itemBuilder: (context, i) => _SenderTile(group: groups[i]),
                   ),
                 ),

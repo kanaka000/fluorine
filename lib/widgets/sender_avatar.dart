@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// かっこ・記号・空白（【 「 ( ★ など）
 final _skipChar = RegExp(r'^[\p{P}\p{S}\s]', unicode: true);
