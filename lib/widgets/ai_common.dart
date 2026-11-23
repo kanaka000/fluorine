@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
+import '../screens/settings_screen.dart';
+import '../services/ai/api_key_store.dart';
 import '../services/claude_service.dart';
 import '../services/errors.dart';
 import 'add_sheets.dart';
@@ -29,7 +31,18 @@ Future<AiResult?> askAiWithStatus(
   } catch (e) {
     messenger.hideCurrentSnackBar();
     setBusy(false);
-    messenger.showSnackBar(SnackBar(content: Text('AIに頼めませんでした：${friendlyError(e)}')));
+    messenger.showSnackBar(SnackBar(
+      content: Text('AIに頼めませんでした：${friendlyError(e)}'),
+      // キーが使えなかったときは、入れ直す画面への近道を付ける（2026-11-23）
+      action: apiKeyStore.invalid && context.mounted
+          ? SnackBarAction(
+              label: '設定を見る',
+              onPressed: () {
+                if (context.mounted) openApiKeySettings(context);
+              },
+            )
+          : null,
+    ));
     return null;
   }
   messenger.hideCurrentSnackBar();

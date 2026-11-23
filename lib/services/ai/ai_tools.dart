@@ -1,4 +1,5 @@
 import '../../data/app_settings.dart';
+import 'ai_usage.dart';
 
 // ✨で使う道具（tool）の定義と、AIへの決まりの文（2026-11-19 の整理で分けた）
 
@@ -207,7 +208,8 @@ const draftNewMailTool = {
 };
 
 /// どの画面からでも頼めるようにするための決まり（ステップ2）
-String get aiCrossRule => appSettings.aiCrossTab ? aiCrossRuleOn : aiCrossRuleOff;
+/// APIキーの期限・今月の使用額の目安も付ける（2026-11-23 の21。ほかのタブの内容ではないので、設定に関係なく渡す）
+String get aiCrossRule => '${appSettings.aiCrossTab ? aiCrossRuleOn : aiCrossRuleOff}${aiUsage.forAi()}';
 
 /// ほかのタブの内容を送らない設定のとき（2026-11-18 初期値。A06）
 const aiCrossRuleOff = 'ほかのタブ（予定・タスク・メモ・受信メール）の内容は、設定により送られていません。'

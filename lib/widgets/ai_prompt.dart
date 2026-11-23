@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../data/app_settings.dart';
+import '../screens/settings_screen.dart';
+import '../services/ai/ai_usage.dart';
 import '../services/claude_service.dart';
 
 /// AIへの頼みごとを音声で聞き取る（タップ用）。
@@ -266,7 +268,7 @@ Future<bool> ensureAiConsent(BuildContext context) async {
     await showAiUnavailable(context);
     return false;
   }
-  if (appSettings.aiConsent) return true;
+  if (appSettings.aiConsent) return _showAiKeyNotices(context);
   final ok = await showDialog<bool>(
     context: context,
     useRootNavigator: true,
@@ -278,7 +280,7 @@ Future<bool> ensureAiConsent(BuildContext context) async {
             '・開いているメール・予定・タスク・メモの内容（返信の下書きでは、元のメールの本文全体）\n'
             '・全体の設定の「✨にほかのタブの内容も見せる」がオンのときは、これからの予定・未完了のタスク・メモ・'
             '受信メール（最新100通の差出人・件名・本文の冒頭）\n\n'
-            '送るときは、secrets.json に入れたAnthropicのAPIキーを使います（利用料はキーの持ち主にかかります）。'
+            '送るときは、全体の設定で入れたAnthropicのAPIキーを使います（利用料はキーの持ち主にかかります）。'
             '音声での頼みごとは、端末の音声認識の仕組みで文字にします。\n\n'
             'AIは下書きや確認画面を出すだけで、送信・保存・削除は自分で押します。'),
       ),
@@ -288,8 +290,34 @@ Future<bool> ensureAiConsent(BuildContext context) async {
       ],
     ),
   );
-  if (ok == true) appSettings.setAiConsent(true);
-  return ok == true;
+  if (ok != true) return false;
+  appSettings.setAiConsent(true);
+  if (!context.mounted) return false;
+  return _showAiKeyNotices(context);
+}
+
+/// APIキーの期限が近い・予算に近いときのお知らせ（2026-11-23 の21）。
+/// 期限は1日1回、予算は月に「80%」「100%」の各1回。「設定を見る」を押したら✨はやめて全体の設定を開く
+Future<bool> _showAiKeyNotices(BuildContext context) async {
+  final notices = aiUsage.takeNotices();
+  if (notices.isEmpty) return true;
+  final go = await showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    builder: (c) => AlertDialog(
+      title: const Text('AIのお知らせ'),
+      content: SingleChildScrollView(child: Text(notices.join('\n\n'))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('設定を見る')),
+        FilledButton(onPressed: () => Navigator.pop(c, false), child: const Text('このまま使う')),
+      ],
+    ),
+  );
+  if (go == true && context.mounted) {
+    openGeneralSettings(context);
+    return false;
+  }
+  return context.mounted;
 }
 
 /// APIキーがないときに✨・Claudeボタンを押したら出す案内（2026-11-18）
@@ -300,8 +328,8 @@ Future<void> showAiUnavailable(BuildContext context) {
     builder: (c) => AlertDialog(
       title: const Text('AIは使えません'),
       content: const Text('AI（Claude）を使うには、AnthropicのAPIキーが必要です。\n\n'
-          'secrets.json の ANTHROPIC_API_KEY に自分のキーを入れて、'
-          '--dart-define-from-file=secrets.json を付けて起動し直してください（利用料はキーの持ち主にかかります）。\n\n'
+          '全体の設定の「AI（✨）」→「APIキー」で、自分のキーを入れてください'
+          '（キーの作り方の案内もあります。利用料はキーの持ち主にかかります）。\n\n'
           'AIを使わなくても、ほかの機能はそのまま使えます。'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c), child: const Text('閉じる')),

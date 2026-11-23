@@ -2,23 +2,23 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../errors.dart';
+import 'ai_usage.dart';
+import 'api_key_store.dart';
 
 // Claude API とのやり取りと安全対策（2026-11-19 の整理で claude_service.dart から分けた）
 
-/// APIキーは secrets.json から読み込む（コードには書かない）
-/// 起動：flutter run --dart-define-from-file=secrets.json
-const anthropicApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
+/// APIキーは、全体の設定の「APIキー」で入れて暗号化して保存する（2026-11-23。services/ai/api_key_store.dart）。
+/// 以前のように secrets.json で組み込んだキーは、最初の起動で1回だけそこへ移す
 
 /// 使うモデル（速くて安いHaiku）
 const claudeModel = 'claude-haiku-5-5';
 
-/// 空白・見本のまま（「ここに」を含む）のキーは未設定として扱う（2026-11-18 C01）
-bool get claudeAvailable => anthropicApiKey.trim().isNotEmpty && !anthropicApiKey.contains('ここに');
+/// 使えるキーがあるか（空白・見本のままは未設定。2026-11-18 C01）
+bool get claudeAvailable => apiKeyStore.available;
 
 void checkClaudeKey() {
   if (!claudeAvailable) {
-    throw const AppMessage('AnthropicのAPIキーが設定されていません（secrets.json の ANTHROPIC_API_KEY を入れて、'
-        '--dart-define-from-file=secrets.json で起動してください）');
+    throw const AppMessage('AnthropicのAPIキーが入っていません（全体の設定の「APIキー」で入れてください）');
   }
 }
 
@@ -57,7 +57,7 @@ Future<Map<String, dynamic>> postToClaude(Map<String, dynamic> payload) async {
       .post(
     Uri.parse('https://api.anthropic.com/v1/messages'),
     headers: {
-      'x-api-key': anthropicApiKey.trim(),
+      'x-api-key': apiKeyStore.key,
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
@@ -68,15 +68,25 @@ Future<Map<String, dynamic>> postToClaude(Map<String, dynamic> payload) async {
   if (res.statusCode != 200) {
     // AIの応答はそのまま画面に出さない（開発中だけターミナルへ。2026-11-18 B05）
     devLog('Claude APIエラー（${res.statusCode}）：$body');
-    throw AppMessage(switch (res.statusCode) {
-      401 || 403 => 'AnthropicのAPIキーが正しくないか、期限が切れています（secrets.json の ANTHROPIC_API_KEY）',
-      429 => 'AIへの頼みごとが多すぎるか、利用料の上限に達しています。少し待ってからもう一度試してください',
-      400 when body.contains('credit') => 'Anthropicの利用残高が足りません。コンソールで確かめてください',
-      >= 500 => 'AIが混み合っているか、一時的な問題が起きています。少し待ってからもう一度試してください',
-      _ => 'AIに頼めませんでした（${res.statusCode}）',
+    // エラーの種類を記録して、全体の設定に出す（2026-11-23 の21）
+    final kind = classifyAiError(res.statusCode, body);
+    aiUsage.recordError(kind);
+    if (kind == AiErrorKind.keyInvalid) apiKeyStore.markInvalid(); // 入れ直すまで設定画面に印
+    throw AppMessage(switch (kind) {
+      AiErrorKind.keyInvalid => 'AnthropicのAPIキーが正しくないか、期限が切れています。全体の設定の「APIキー」で入れ直してください',
+      AiErrorKind.orgSpendLimit => 'Anthropicの組織の月の利用上限に達しました。翌月1日の朝9時（日本時間）に戻ります。'
+          '急ぐときは、コンソールで上限を上げてください',
+      AiErrorKind.customLimit => '自分で決めたAPIの利用上限に達しました。コンソールで上限を上げるか、上限が戻るまで待ってください',
+      AiErrorKind.credit => 'Anthropicの利用残高が足りません。コンソールで確かめてください',
+      AiErrorKind.rateLimit => 'AIへの頼みごとが多すぎます。少し待ってからもう一度試してください',
+      AiErrorKind.server => 'AIが混み合っているか、一時的な問題が起きています。少し待ってからもう一度試してください',
+      AiErrorKind.other => 'AIに頼めませんでした（${res.statusCode}）',
     });
   }
-  return jsonDecode(body) as Map<String, dynamic>;
+  final json = jsonDecode(body) as Map<String, dynamic>;
+  apiKeyStore.markValid();
+  aiUsage.recordSuccess(json['usage']); // 使ったトークン数を月ごとに足す（使用額の目安。2026-11-23 の21）
+  return json;
 }
 
 /// Claudeの返事から、使われた道具（なければ文章の答え）を取り出す

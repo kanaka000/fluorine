@@ -53,6 +53,7 @@ secrets.json
 # ---- 公開準備で追加（2026-11-18。SECURITY_REVIEW.md の除外一覧より） ----
 # 実設定（見本の secrets.example.json だけは公開する）
 secrets.*.json
+secrets_*.json
 !secrets.example.json
 .env
 .env.*

@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../services/ai/api_key_store.dart';
 import '../services/claude_service.dart';
 import 'ai_prompt.dart';
 
@@ -42,7 +43,12 @@ class AiButton extends StatelessWidget {
         child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
-    // APIキーがないときは薄く表示し、押したら使い方の案内だけ出す（2026-11-18）
+    // APIキーがないときは薄く表示し、押したら使い方の案内だけ出す（2026-11-18）。
+    // キーは設定画面で入れ替えられるので、変わったら描き直す（2026-11-23）
+    return ListenableBuilder(listenable: apiKeyStore, builder: (context, _) => _button(context));
+  }
+
+  Widget _button(BuildContext context) {
     final available = ClaudeService.available;
     final theme = Theme.of(context);
     return Semantics(

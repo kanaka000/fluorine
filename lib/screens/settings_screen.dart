@@ -5,8 +5,11 @@ import '../data/app_settings.dart';
 import '../data/calendar_store.dart';
 import '../data/memo_store.dart';
 import '../data/sender_merges.dart';
+import '../services/ai/ai_usage.dart';
+import '../services/ai/api_key_store.dart';
 import '../services/notion_sync.dart';
 import '../services/errors.dart';
+import 'api_key_screen.dart';
 
 /// 設定画面の見出し
 Widget _header(BuildContext context, String text) {
@@ -22,6 +25,11 @@ void openGeneralSettings(BuildContext context) {
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GeneralSettingsScreen()));
 }
 
+/// APIキーの画面を開く（キーが使えなかったときのお知らせから。2026-11-23）
+void openApiKeySettings(BuildContext context) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ApiKeyScreen()));
+}
+
 // ---------------- 全体の設定（お知らせ・外観） ----------------
 
 class GeneralSettingsScreen extends StatelessWidget {
@@ -32,7 +40,7 @@ class GeneralSettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('全体の設定')),
       body: ListenableBuilder(
-        listenable: appSettings,
+        listenable: Listenable.merge([appSettings, aiUsage, apiKeyStore]),
         builder: (context, _) => ListView(
           children: [
             _header(context, 'お知らせ'),
@@ -70,6 +78,18 @@ class GeneralSettingsScreen extends StatelessWidget {
               ),
             ),
             _header(context, 'AI（✨）'),
+            ListTile(
+              leading: Icon(Icons.key_outlined,
+                  color: apiKeyStore.invalid || !apiKeyStore.available ? Theme.of(context).colorScheme.error : null),
+              title: const Text('APIキー'),
+              subtitle: Text(!apiKeyStore.available
+                  ? '入っていません。タップして入れてください（作り方の案内もあります）'
+                  : apiKeyStore.invalid
+                      ? '${apiKeyStore.masked}：使えませんでした。タップして入れ直してください'
+                      : '${apiKeyStore.masked}（タップで入れ替え・消す）'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => openApiKeySettings(context),
+            ),
             SwitchListTile(
               title: const Text('✨にほかのタブの内容も見せる'),
               subtitle: const Text('オンにすると、どの画面の✨でも、これからの予定・未完了のタスク・メモ・'
@@ -78,6 +98,7 @@ class GeneralSettingsScreen extends StatelessWidget {
               value: appSettings.aiCrossTab,
               onChanged: appSettings.setAiCrossTab,
             ),
+            ..._aiKeyTiles(context),
             _header(context, '端末内のデータ'),
             ListTile(
               leading: Icon(Icons.delete_forever_outlined, color: Theme.of(context).colorScheme.error),
@@ -428,6 +449,7 @@ Future<void> _clearLocalData(BuildContext context) async {
           '・メモ（${memoStore.memos.length}件）\n'
           '・送信元のまとめ\n'
           '・Notion連携の状態（送れていないメモ・ページとのつながり）\n'
+          '・AIのAPIキー、使用額の記録と月の予算\n'
           '・設定（初期値に戻ります）\n\n'
           'Googleのメール・予定・タスク、Notionのページは消えません。'
           'Notionに保存していたメモは、メモの設定の「Notionから復元」で戻せます'),
@@ -459,6 +481,91 @@ Future<void> _clearLocalData(BuildContext context) async {
   memoStore.clearLocal();
   senderMerges.clearLocal();
   notionSync.clearLocal();
+  await apiKeyStore.clearLocal();
+  aiUsage.clearLocal();
   appSettings.resetToDefaults();
   messenger.showSnackBar(const SnackBar(content: Text('端末内のデータを消しました')));
+}
+
+/// 全体の設定の「AI（✨）」に出す、APIキーの期限・今月の使用額の目安・月の予算・最後のエラー（2026-11-23 の21）
+List<Widget> _aiKeyTiles(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  final left = aiUsage.daysLeft;
+  final budget = aiUsage.budget;
+  final ratio = aiUsage.budgetRatio;
+  return [
+    ListTile(
+      leading: const Icon(Icons.key_outlined),
+      title: const Text('APIキーの期限'),
+      subtitle: left == null
+          ? const Text('なし（または分かりません）。上の「APIキー」でキーを入れるときに、期限を選べます')
+          : Text(aiUsage.expiryText(),
+              style: left <= keyExpiryNoticeDays ? TextStyle(color: scheme.error, fontWeight: FontWeight.bold) : null),
+    ),
+    ListTile(
+      leading: const Icon(Icons.payments_outlined),
+      title: const Text('今月の使用額の目安'),
+      subtitle: Text.rich(TextSpan(children: [
+        TextSpan(
+          text: aiUsage.usageText(),
+          style: ratio != null && ratio >= budgetNoticeRatio
+              ? TextStyle(color: scheme.error, fontWeight: FontWeight.bold)
+              : null,
+        ),
+        const TextSpan(
+            text: '\nこのアプリから使った分を、アプリが数えた目安です。同じキーをほかで使った分は入りません。'
+                '正確な額と上限は、Anthropicのコンソールで確かめてください'),
+      ])),
+      isThreeLine: true,
+    ),
+    ListTile(
+      leading: const Icon(Icons.savings_outlined),
+      title: const Text('月の予算'),
+      subtitle: const Text('使用額の目安が予算の80%を超えたとき・達したときに、✨を押すとお知らせします'),
+      trailing: Text(budget == null ? '未設定' : formatUsd(budget)),
+      onTap: () => _editAiBudget(context),
+    ),
+    if (aiUsage.lastErrorAt != null)
+      ListTile(
+        leading: Icon(Icons.error_outline, color: aiUsage.errorUnresolved ? scheme.error : null),
+        title: const Text('最後のエラー'),
+        subtitle: Text(aiUsage.lastErrorText()),
+      ),
+  ];
+}
+
+/// 月の予算（米ドル）を入れる。空にすると「未設定」
+Future<void> _editAiBudget(BuildContext context) async {
+  final controller = TextEditingController(text: aiUsage.budget?.toString() ?? '');
+  final text = await showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('月の予算（米ドル）'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(prefixText: '\$ ', hintText: '例 5', helperText: '空にすると、予算なし（お知らせしない）'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text('キャンセル')),
+        FilledButton(onPressed: () => Navigator.pop(c, controller.text), child: const Text('保存')),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (text == null) return;
+  final t = text.replaceAll(RegExp(r'[\$,\s]'), '');
+  if (t.isEmpty) {
+    aiUsage.setBudget(null);
+    return;
+  }
+  final v = double.tryParse(t);
+  if (v == null || v <= 0) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('0より大きい金額を数字で入れてください')));
+    }
+    return;
+  }
+  aiUsage.setBudget(v);
 }

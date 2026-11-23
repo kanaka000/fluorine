@@ -5,6 +5,8 @@ import 'data/memo_store.dart';
 import 'data/sender_merges.dart';
 import 'screens/home_shell.dart';
 import 'screens/splash_screen.dart';
+import 'services/ai/ai_usage.dart';
+import 'services/ai/api_key_store.dart';
 import 'services/google_auth.dart';
 import 'services/notion_sync.dart';
 import 'services/startup.dart';
@@ -13,6 +15,8 @@ import 'widgets/ja_localizations.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await appSettings.load(); // 保存しておいた設定を読み込む
+  await apiKeyStore.load(); // AnthropicのAPIキー（暗号化して保存。組み込まれたキーは1回だけ移す。2026-11-23）
+  await aiUsage.load(); // AIの今月の使用額の目安・最後のエラー（2026-11-23）
   await senderMerges.load(); // 送信元のまとめ（アカウントごと。ログインしたアカウントの分を読み込む）
   googleAuth.addListener(() => senderMerges.setAccount(googleAuth.user?.email));
   await memoStore.load(); // 端末に保存したメモを読み込む
