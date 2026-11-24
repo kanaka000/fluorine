@@ -4,6 +4,7 @@ import '../data/task_store.dart';
 import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/item_color.dart';
 import '../widgets/links/links.dart';
 import '../widgets/task_ai.dart';
 
@@ -69,6 +70,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (mounted) setState(() => _task = saved);
   }
 
+  /// つないだ予定を保存する（2026-11-24 の25）
+  Future<void> _saveEventLinks(List<EventLinkRef> links) async {
+    final t = _current;
+    final saved = await taskStore.update(t, t.copyWith(eventLinks: links));
+    if (mounted) setState(() => _task = saved);
+  }
+
   Future<void> _delete() async {
     if (_deleting) return;
     setState(() => _deleting = true);
@@ -107,22 +115,31 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              SelectableText(
-                t.title,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  decoration: t.done ? TextDecoration.lineThrough : null,
-                  color: t.done ? theme.colorScheme.outline : null,
+              // 色の付いたタスクは、名前と期限の部分だけをその色の帯に（メモの詳細画面と同じ。2026-11-24 の24）
+              ItemColorBand(
+                color: t.color,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SelectableText(
+                      t.title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        decoration: t.done ? TextDecoration.lineThrough : null,
+                        color: t.done ? theme.colorScheme.outline : null,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.flag_outlined, color: overdue ? theme.colorScheme.error : null),
+                      title: Text(
+                        t.due == null ? '期限なし' : '期限：${formatDue(t.due!, withYear: true)}',
+                        style: overdue ? TextStyle(color: theme.colorScheme.error) : null,
+                      ),
+                      subtitle: overdue ? const Text('期限が過ぎています') : null,
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.flag_outlined, color: overdue ? theme.colorScheme.error : null),
-                title: Text(
-                  t.due == null ? '期限なし' : '期限：${formatDue(t.due!, withYear: true)}',
-                  style: overdue ? TextStyle(color: theme.colorScheme.error) : null,
-                ),
-                subtitle: overdue ? const Text('期限が過ぎています') : null,
               ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
@@ -137,6 +154,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ],
               MemoLinkSection(links: t.memoLinks, onChanged: _saveLinks),
               MailLinkSection(links: t.mailLinks, onChanged: _saveMailLinks),
+              EventLinkSection(links: t.eventLinks, onChanged: _saveEventLinks),
               const SizedBox(height: 16),
               Row(
                 children: [

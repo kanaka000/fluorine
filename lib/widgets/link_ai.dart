@@ -119,7 +119,7 @@ Future<T?> _choose<T>(
   );
 }
 
-// ---------------- 予定・タスクを開いているとき：相手はメモかメール ----------------
+// ---------------- 予定・タスクを開いているとき：相手はメモ・メール、予定⇔タスク（2026-11-24 の25） ----------------
 
 Future<CalendarEvent?> _fromHolder(BuildContext context, AiLink r, {CalendarEvent? event, TaskItem? task}) async {
   final holderName = event?.title ?? task!.title;
@@ -218,7 +218,91 @@ Future<CalendarEvent?> _fromHolder(BuildContext context, AiLink r, {CalendarEven
     return saved;
   }
 
-  showTimedSnack(context, '$kindにリンクできるのは、メモとメールです');
+  // 予定 ⇔ タスク（2026-11-24 の25）。リンクはタスクの側にだけ保存する
+  final date = r.date;
+  final hint = [if (date != null) '${date.month}/${date.day}', if (r.keyword != null) '「${r.keyword}」'].join('・');
+
+  if (event != null && r.target == LinkTarget.task) {
+    final id = event.id;
+    if (id == null) return null;
+    bool linked(TaskItem t) => t.eventLinks.any((l) => l.id == id);
+    final base = r.unlink ? taskStore.tasks.where(linked) : taskStore.tasks.where((t) => !t.done && !linked(t));
+    final items = base
+        .where((t) => date == null || (t.due != null && _sameDay(t.due!, date)))
+        .where((t) => _hit(r.keyword, [t.title]))
+        .take(50)
+        .toList();
+    final x = await _choose<TaskItem>(context,
+        items: items,
+        label: (t) => t.title,
+        sub: (t) => t.due == null ? null : '期限：${formatDue(t.due!)}',
+        notFound: r.unlink
+            ? 'この予定にリンクしているタスクが見つかりませんでした'
+            : (hint.isEmpty ? 'リンクできるタスクがありません' : '$hintに当てはまる未完了のタスクが見つかりませんでした'),
+        confirmText: (t) => r.unlink
+            ? '「${t.title}」から「$holderName」の予定のリンクを外します。'
+            : '「${t.title}」に「$holderName」の予定をリンクします。',
+        unlink: r.unlink,
+        pickTitle: r.unlink ? 'リンクを外すタスクを選ぶ' : 'リンクするタスクを選ぶ');
+    if (x == null || !context.mounted) return null;
+    await taskStore.update(
+        x,
+        x.copyWith(
+            eventLinks: r.unlink
+                ? x.eventLinks.where((l) => l.id != id).toList()
+                : [...x.eventLinks, EventLinkRef(id, event.title)]));
+    if (context.mounted) showTimedSnack(context, r.unlink ? 'リンクを外しました' : 'タスクにリンクしました');
+    return null;
+  }
+
+  if (task != null && r.target == LinkTarget.event) {
+    final t = taskStore.find(task) ?? task;
+    final linkedIds = {for (final l in t.eventLinks) l.id};
+    final List<CalendarEvent> items;
+    if (r.unlink) {
+      // 外すときは今つながっている予定から（読み込み済みでなければ保存したタイトルで）
+      final refs = t.eventLinks.where((l) {
+        final e = calendarStore.loadedEvent(l.id);
+        return _hit(r.keyword, [l.title, if (e != null) e.title]) && (date == null || e == null || _eventOn(e, date));
+      }).toList();
+      final x = await _choose<EventLinkRef>(context,
+          items: refs,
+          label: (l) => calendarStore.loadedEvent(l.id)?.title ?? l.title,
+          sub: (l) {
+            final e = calendarStore.loadedEvent(l.id);
+            return e == null ? null : formatEventWhen(e);
+          },
+          notFound: 'このタスクに、外せる予定のリンクが見つかりませんでした',
+          confirmText: (l) => '「$holderName」から「${l.title}」の予定のリンクを外します。予定そのものは消えません。',
+          unlink: true,
+          pickTitle: '外す予定を選ぶ');
+      if (x == null || !context.mounted) return null;
+      await taskStore.update(t, t.copyWith(eventLinks: t.eventLinks.where((l) => !identical(l, x)).toList()));
+      if (context.mounted) showTimedSnack(context, 'リンクを外しました');
+      return null;
+    }
+    final today = DateTime.now();
+    items = calendarStore.allLoaded
+        .where((e) => e.id != null && !linkedIds.contains(e.id))
+        .where((e) => date != null ? _eventOn(e, date) : !e.end.isBefore(DateTime(today.year, today.month, today.day)))
+        .where((e) => _hit(r.keyword, [e.title]))
+        .take(50)
+        .toList();
+    final x = await _choose<CalendarEvent>(context,
+        items: items,
+        label: (e) => e.title,
+        sub: (e) => formatEventWhen(e),
+        notFound: hint.isEmpty ? 'リンクできる予定がありません' : '$hintに当てはまる予定が見つかりませんでした（読み込み済みの予定から探しています）',
+        confirmText: (e) => '「$holderName」に「${e.title}」（${formatEventWhen(e)}）の予定をリンクします。',
+        unlink: false,
+        pickTitle: 'リンクする予定を選ぶ');
+    if (x == null || !context.mounted) return null;
+    await taskStore.update(t, t.copyWith(eventLinks: [...t.eventLinks, EventLinkRef(x.id!, x.title)]));
+    if (context.mounted) showTimedSnack(context, '予定をリンクしました');
+    return null;
+  }
+
+  showTimedSnack(context, event != null ? '予定にリンクできるのは、メモ・メール・タスクです' : 'タスクにリンクできるのは、メモ・メール・予定です');
   return null;
 }
 

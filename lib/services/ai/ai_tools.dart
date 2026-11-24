@@ -1,7 +1,17 @@
 import '../../data/app_settings.dart';
+import 'ai_context.dart';
 import 'ai_usage.dart';
 
 // ✨で使う道具（tool）の定義と、AIへの決まりの文（2026-11-19 の整理で分けた）
+
+/// カードの色（予定・タスク。2026-11-24 の24）。色の意味（仕事など）はアプリでは決めないので、色の名前で言われたときだけ
+const aiColorProp = {
+  'type': 'string',
+  'enum': ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'gray', 'none'],
+  'description': 'カードの色。ユーザーが色の名前を言ったときだけ入れる（赤=red、オレンジ=orange、黄・黄色=yellow、'
+      '緑=green、青緑=teal、青=blue、紫=purple、ピンク=pink、灰色・グレー=gray、色を外す・色なしにする=none）。'
+      '「仕事」「プライベート」などの意味から色を推測しない。言われていなければ省略',
+};
 
 const eventProps = {
   'title': {'type': 'string', 'description': '予定の名前（短く）'},
@@ -12,6 +22,7 @@ const eventProps = {
   'all_day': {'type': 'boolean', 'description': '終日の予定なら true'},
   'location': {'type': 'string', 'description': '場所（なければ省略）'},
   'note': {'type': 'string', 'description': '持ち物・相手・URLなど、予定のメモ（なければ省略）'},
+  'color': aiColorProp,
 };
 
 const createEventTool = {
@@ -44,7 +55,7 @@ const createEventToolForCalendar = {
 
 const updateEventTool = {
   'name': 'update_event',
-  'description': '選んでいる予定を変更する（時間の変更、場所の追加、タイトルの修正など）。'
+  'description': '選んでいる予定を変更する（時間の変更、場所の追加、タイトルの修正、色など）。'
       '変える項目だけを入れ、変えない項目は省略する。',
   'input_schema': {
     'type': 'object',
@@ -76,6 +87,7 @@ const createTaskTool = {
       'title': {'type': 'string', 'description': 'やること（短く、動詞で終える）'},
       'due': {'type': 'string', 'description': '期限 YYYY-MM-DD。なければ省略'},
       'note': {'type': 'string', 'description': '補足（なければ空）'},
+      'color': aiColorProp,
     },
     'required': ['title'],
   },
@@ -209,7 +221,9 @@ const draftNewMailTool = {
 
 /// どの画面からでも頼めるようにするための決まり（ステップ2）
 /// APIキーの期限・今月の使用額の目安も付ける（2026-11-23 の21。ほかのタブの内容ではないので、設定に関係なく渡す）
-String get aiCrossRule => '${appSettings.aiCrossTab ? aiCrossRuleOn : aiCrossRuleOff}${aiUsage.forAi()}';
+/// 日本の祝日も同じく設定に関係なく渡す（2026-11-24 の22）
+String get aiCrossRule =>
+    '${appSettings.aiCrossTab ? aiCrossRuleOn : aiCrossRuleOff}${aiHolidayInfo()}${aiUsage.forAi()}';
 
 /// ほかのタブの内容を送らない設定のとき（2026-11-18 初期値。A06）
 const aiCrossRuleOff = 'ほかのタブ（予定・タスク・メモ・受信メール）の内容は、設定により送られていません。'
@@ -257,7 +271,7 @@ const taskNumberProp = {
 
 const updateTaskTool = {
   'name': 'update_task',
-  'description': 'タスクの名前・期限・メモを変更する。変える項目だけを入れ、変えない項目は省略する。',
+  'description': 'タスクの名前・期限・メモ・色を変更する。変える項目だけを入れ、変えない項目は省略する。',
   'input_schema': {
     'type': 'object',
     'properties': {
@@ -266,6 +280,7 @@ const updateTaskTool = {
       'due': {'type': 'string', 'description': '新しい期限 YYYY-MM-DD'},
       'clear_due': {'type': 'boolean', 'description': '期限をなくすなら true'},
       'note': {'type': 'string', 'description': '新しいメモ（全体を置き換える）'},
+      'color': aiColorProp,
     },
   },
 };

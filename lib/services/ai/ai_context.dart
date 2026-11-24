@@ -64,6 +64,20 @@ String aiReferenceInfo({
   return buf.toString();
 }
 
+/// 日本の祝日（今日から約1年分）。個人の情報ではないので、「✨にほかのタブの内容も見せる」に関係なく渡す（2026-11-24 の22）
+String aiHolidayInfo() {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final list = calendarStore.holidaysBetween(today, DateTime(today.year + 1, today.month, today.day));
+  if (list.isEmpty) return '';
+  String d(DateTime x) => '${x.year}-${pad2(x.month)}-${pad2(x.day)}（${weekdayJa(x)}）';
+  return '\n\n【日本の祝日（法律で決まった祝日・振替休日。今日から1年分。設定に関係なくいつも渡しています）】\n'
+      '${list.map((e) => '- ${d(e.key)} ${e.value}').join('\n')}\n'
+      '祝日・休み・連休について聞かれたら、この一覧と土日をもとに answer で答えてください'
+      '（連休は、土日と祝日が続く日をまとめて「○月○日（土）〜○日（月）の3連休」のように）。'
+      '予定を作るときに「祝日」「次の連休」などと言われたら、この一覧で日付を決めてください。';
+}
+
 String aiTodayText() {
   final now = DateTime.now();
   return '${now.year}-${pad2(now.month)}-${pad2(now.day)}（${weekdayJa(now)}曜日）'
@@ -84,7 +98,8 @@ String describeEvent(CalendarEvent e) {
     when = '${d(e.start)} ${t(e.start)}〜${d(e.end)} ${t(e.end)}';
   }
   final place = (e.location ?? '').trim().isEmpty ? '' : '（場所：${e.location!.trim()}）';
-  return '$when ${e.title}$place';
+  final color = e.color == null ? '' : '［色：${e.color!.label}］'; // 「黄色の予定は？」に答えられるように（2026-11-24 の24）
+  return '$when ${e.title}$place$color';
 }
 
 /// タスク1件を、AIに渡す1行の文字にする
@@ -92,7 +107,8 @@ String describeTask(TaskItem t) {
   final due = t.due == null
       ? ''
       : '（期限：${t.due!.year}-${pad2(t.due!.month)}-${pad2(t.due!.day)}（${weekdayJa(t.due!)}））';
-  return '${t.title}$due${t.done ? '［完了］' : ''}';
+  final color = t.color == null ? '' : '［色：${t.color!.label}］';
+  return '${t.title}$due$color${t.done ? '［完了］' : ''}';
 }
 
 /// 一覧の最後の予定までの日数（AIに「どこまでの予定か」を伝えるため）

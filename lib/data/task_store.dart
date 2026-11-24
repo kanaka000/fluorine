@@ -104,7 +104,7 @@ class TaskStore extends ChangeNotifier {
 
   /// 削除したタスクを元に戻す（Googleには新しいタスクとして作り直す。完了済みなら完了にする）
   Future<void> restore(TaskItem t) async {
-    final saved = await add(TaskItem(title: t.title, due: t.due, note: t.note, memoLinks: t.memoLinks, mailLinks: t.mailLinks));
+    final saved = await add(TaskItem(title: t.title, due: t.due, note: t.note, memoLinks: t.memoLinks, mailLinks: t.mailLinks, colorKey: t.colorKey, eventLinks: t.eventLinks));
     if (t.done) await toggle(saved);
   }
 

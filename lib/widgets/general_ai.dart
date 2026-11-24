@@ -15,8 +15,8 @@ import 'ai_prompt.dart';
 const generalAiHint = '例：明日の予定は？／期限が近いタスクは？／田中さんに打ち合わせのお礼メールを作って／金曜15時に歯医者を入れて／見積書が添付されたメールを探して';
 
 /// AIが作った新しい予定の下書きで、追加画面を開く（保存は自分で押す）。[mail] があればメールから作る
-Future<void> openNewEventFromAi(BuildContext context, AiEvent r, {Mail? mail}) async {
-  await showAddEventSheet(
+Future<CalendarEvent?> openNewEventFromAi(BuildContext context, AiEvent r, {Mail? mail}) {
+  return showAddEventSheet(
     context,
     mail,
     title: r.title,
@@ -27,6 +27,7 @@ Future<void> openNewEventFromAi(BuildContext context, AiEvent r, {Mail? mail}) a
     allDay: (r.allDay ?? false) || r.time == null,
     location: r.location,
     note: r.note,
+    color: r.color,
   );
 }
 

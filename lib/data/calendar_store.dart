@@ -31,6 +31,48 @@ class CalendarStore extends ChangeNotifier {
 
   bool get monthLoading => _monthsLoading.isNotEmpty;
 
+  // ---- 日本の祝日（2026-11-24 の22。読むだけ。年ごとに読み込む） ----
+  final Map<DateTime, String> _holidays = {};
+  final Set<int> _holidayYears = {};
+  final Set<int> _holidayYearsLoading = {};
+
+  /// その日の祝日名（祝日でなければ null）
+  String? holidayOn(DateTime day) => _holidays[DateTime(day.year, day.month, day.day)];
+
+  /// [from] から [to] まで（両端を含む）の祝日を日付の順に
+  List<MapEntry<DateTime, String>> holidaysBetween(DateTime from, DateTime to) {
+    final a = DateTime(from.year, from.month, from.day);
+    final b = DateTime(to.year, to.month, to.day);
+    return _holidays.entries.where((e) => !e.key.isBefore(a) && !e.key.isAfter(b)).toList()
+      ..sort((x, y) => x.key.compareTo(y.key));
+  }
+
+  /// [first]〜[last] 年の祝日を読み込む（読み込み済みの年は飛ばす）。
+  /// 祝日が読めなくても予定の表示は止めない（失敗は開発中だけターミナルに出し、次の読み込みでやり直す）
+  Future<void> _ensureHolidays(int first, int last) async {
+    final service = _service;
+    if (service == null) return;
+    final years = [
+      for (var y = first; y <= last; y++)
+        if (!_holidayYears.contains(y) && !_holidayYearsLoading.contains(y)) y
+    ];
+    if (years.isEmpty) return;
+    _holidayYearsLoading.addAll(years);
+    final gen = googleAuth.session;
+    try {
+      final map = await service.fetchHolidays(
+          DateTime(years.first), DateTime(years.last + 1));
+      if (gen != googleAuth.session) return;
+      _holidays.addAll(map);
+      _holidayYears.addAll(years);
+      notifyListeners();
+    } catch (e) {
+      devLog('祝日の読み込みに失敗しました: $e');
+    } finally {
+      if (gen == googleAuth.session) _holidayYearsLoading.removeAll(years);
+    }
+  }
+
   static DateTime _monthKey(DateTime d) => DateTime(d.year, d.month);
 
   /// 月表示：[anyDay] を含む月の予定を読み込む（読み込み済みなら何もしない）
@@ -50,6 +92,7 @@ class CalendarStore extends ChangeNotifier {
       final list = await service.fetchRange(from, to);
       if (gen != googleAuth.session) return;
       _months[key] = list;
+      _ensureHolidays(from.year, to.year); // その月の祝日（読み込み済みの年なら何もしない）
     } catch (e) {
       if (gen == googleAuth.session) error = '予定の読み込みに失敗しました：${friendlyError(e)}';
     } finally {
@@ -111,6 +154,10 @@ class CalendarStore extends ChangeNotifier {
           ..clear()
           ..addAll(list);
         _months.clear();
+        // 祝日：去年から、表示期間の終わりの年（と来年）まで
+        final now = DateTime.now();
+        final end = now.add(Duration(days: appSettings.calendarDays));
+        _ensureHolidays(now.year - 1, end.year > now.year + 1 ? end.year : now.year + 1);
       }
     } on StaleSession {
       // ログアウト・アカウントの切り替えの前に始めた読み込み → 結果は捨てる
@@ -164,6 +211,25 @@ class CalendarStore extends ChangeNotifier {
     return list.where((e) => e.mailLinks.any((l) => l.id == mailId)).toList();
   }
 
+  /// 予定を ID で探す：読み込み済みにあればそれ、なければ Google から1件読む（2026-11-24 の25）。
+  /// 消された予定は null。ログアウト中は例外
+  Future<CalendarEvent?> eventById(String id) async {
+    for (final e in allLoaded) {
+      if (e.id == id) return e;
+    }
+    final service = _service;
+    if (service == null) throw const AppMessage('Googleにログインしてください');
+    return service.get(id);
+  }
+
+  /// 読み込み済みの予定のうち、ID が同じもの（なければ null）
+  CalendarEvent? loadedEvent(String id) {
+    for (final e in allLoaded) {
+      if (e.id == id) return e;
+    }
+    return null;
+  }
+
   /// 読み込み済みの予定すべて（一覧の分＋月ごとに読んだ分。同じ予定は1つ）
   List<CalendarEvent> get allLoaded {
     final seen = <String>{};
@@ -206,6 +272,7 @@ class CalendarStore extends ChangeNotifier {
         location: e.location,
         memoLinks: e.memoLinks,
         mailLinks: e.mailLinks,
+        colorKey: e.colorKey,
       ));
 
   /// 自動読み込みがオフのとき：ダミーを消して、手動で読み込むまで空にする
@@ -224,6 +291,9 @@ class CalendarStore extends ChangeNotifier {
     _events.clear();
     _months.clear();
     _lastMonth = null;
+    _holidays.clear();
+    _holidayYears.clear();
+    _holidayYearsLoading.clear();
     notifyListeners();
   }
 }

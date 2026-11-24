@@ -1,4 +1,5 @@
 import 'link_refs.dart';
+import 'memo.dart';
 
 /// 予定1件
 class CalendarEvent {
@@ -13,6 +14,7 @@ class CalendarEvent {
     this.recurring = false,
     this.memoLinks = const [],
     this.mailLinks = const [],
+    this.colorKey,
   }) : end = end ??
             (allDay
                 ? DateTime(start.year, start.month, start.day + 1)
@@ -38,6 +40,11 @@ class CalendarEvent {
   /// つないだメール（メモ欄の最後の行に保存。note には入れない。2026-11-19）
   final List<MailLinkRef> mailLinks;
 
+  /// カードの色（MemoColor.key。null なら指定なし）。メモ欄の隠し行に保存する（2026-11-24 の24）
+  final String? colorKey;
+
+  MemoColor? get color => MemoColor.of(colorKey);
+
   /// 終日の予定の最後の日
   DateTime get lastDay => DateTime(end.year, end.month, end.day - 1);
 
@@ -50,6 +57,8 @@ class CalendarEvent {
     String? location,
     List<MemoLinkRef>? memoLinks,
     List<MailLinkRef>? mailLinks,
+    String? colorKey,
+    bool clearColor = false,
   }) =>
       CalendarEvent(
         id: id,
@@ -62,5 +71,6 @@ class CalendarEvent {
         recurring: recurring,
         memoLinks: memoLinks ?? this.memoLinks,
         mailLinks: mailLinks ?? this.mailLinks,
+        colorKey: clearColor ? null : (colorKey ?? this.colorKey),
       );
 }

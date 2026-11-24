@@ -11,6 +11,7 @@ import '../memo_markdown.dart';
 import '../timed_snack.dart';
 import '../../services/errors.dart';
 import 'sheet_common.dart';
+import '../item_color.dart';
 
 // メモの追加・変更シート
 
@@ -58,58 +59,6 @@ Future<Memo?> showEditMemoSheet(BuildContext context, Memo memo, {String? title,
     showTimedSnack(context, 'メモを変更しました');
   }
   return saved;
-}
-
-/// メモの色を選ぶ丸いボタンの列（左端は「指定なし」）
-class MemoColorPicker extends StatelessWidget {
-  const MemoColorPicker({super.key, required this.selected, required this.onChanged});
-
-  final String? selected;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget dot({required String? key, required Color? color, required String label}) {
-      final isSel = selected == key;
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: Tooltip(
-          message: label,
-          child: InkResponse(
-            onTap: () => onChanged(key),
-            radius: 22,
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: color ?? theme.colorScheme.surface,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSel ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
-                  width: isSel ? 3 : 1,
-                ),
-              ),
-              child: color == null
-                  ? Icon(Icons.format_color_reset_outlined, size: 18, color: theme.colorScheme.outline)
-                  : (isSel ? const Icon(Icons.check, size: 18, color: Colors.black54) : null),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          dot(key: null, color: null, label: '指定なし'),
-          for (final c in MemoColor.all)
-            dot(key: c.key, color: c.cardColor(theme.brightness, theme.colorScheme.surface), label: c.label),
-        ],
-      ),
-    );
-  }
 }
 
 class _MemoForm extends StatefulWidget {
@@ -269,7 +218,7 @@ class _MemoFormState extends State<_MemoForm> {
         const SizedBox(height: 12),
         Text('色', style: theme.textTheme.bodySmall),
         const SizedBox(height: 6),
-        MemoColorPicker(selected: _color, onChanged: (c) => setState(() => _color = c)),
+        ItemColorPicker(selected: _color, onChanged: (c) => setState(() => _color = c)),
         const SizedBox(height: 8),
         TextField(
           controller: _body,

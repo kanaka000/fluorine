@@ -23,7 +23,7 @@ List<TaskItem> visibleTasks() {
 }
 
 const taskAiHint = '例：明日までに見積書を送るを追加／期限が近いタスクは？／見積書のタスクを完了にして／明日の予定は？';
-const taskDetailAiHint = '例：期限を金曜に変えて／完了にして／やることを細かく分けてメモにして／○○さんのメールをリンクして／このタスクを削除して';
+const taskDetailAiHint = '例：期限を金曜に変えて／黄色にして／完了にして／やることを細かく分けてメモにして／○○さんのメールをリンクして／このタスクを削除して';
 
 /// 確認ダイアログを出してからタスクを削除する。削除したら true
 Future<bool> confirmDeleteTask(BuildContext context, TaskItem task) async {
@@ -78,7 +78,8 @@ Future<void> runTaskAi(
         showAiAnswer(context, instruction, notFound);
         return;
       }
-      await showEditTaskSheet(context, tu, title: r.title, due: r.due, clearDue: r.clearDue, note: r.note);
+      await showEditTaskSheet(context, tu,
+          title: r.title, due: r.due, clearDue: r.clearDue, note: r.note, color: r.color);
     case AiTaskComplete r:
       final tc = target(r.number);
       if (tc == null) {
@@ -99,6 +100,7 @@ Future<void> runTaskAi(
     case AiLink r when selected != null:
       await runLinkAi(context, r, task: selected);
     default:
-      await handleCommonAiResult(context, instruction, result, source: source, openHint: 'タスク');
+      await handleCommonAiResult(context, instruction, result,
+          source: source, openHint: 'タスク', fromTask: selected);
   }
 }

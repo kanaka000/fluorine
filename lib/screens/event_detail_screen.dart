@@ -6,6 +6,7 @@ import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/calendar_ai.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/item_color.dart';
 import '../widgets/links/links.dart';
 import '../widgets/event_note.dart';
 
@@ -112,13 +113,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SelectableText(e.title, style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.schedule),
-            title: Text(formatEventWhen(e, withYear: true)),
-            subtitle: e.recurring ? const Text('繰り返しの予定') : null,
+          // 色の付いた予定は、タイトルと日時の部分だけをその色の帯に（メモの詳細画面と同じ。2026-11-24 の24）
+          ItemColorBand(
+            color: e.color,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SelectableText(e.title, style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.schedule),
+                  title: Text(formatEventWhen(e, withYear: true)),
+                  subtitle: e.recurring ? const Text('繰り返しの予定') : null,
+                ),
+              ],
+            ),
           ),
           if (place.isNotEmpty)
             ListTile(
@@ -134,6 +144,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ],
           MemoLinkSection(links: e.memoLinks, onChanged: _saveLinks),
           MailLinkSection(links: e.mailLinks, onChanged: _saveMailLinks),
+          EventTaskBacklinkSection(event: e), // 予定とタスクのリンク（2026-11-24 の25）
           const SizedBox(height: 16),
           Row(
             children: [

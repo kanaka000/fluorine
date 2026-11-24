@@ -41,6 +41,55 @@ class CalendarService {
     return result;
   }
 
+  /// 日本の祝日のカレンダー（Google が公開している「日本の祝日」。法律で決まった祝日だけ。2026-11-24 の22）
+  /// 記念日・銀行休業日も入る ja.japanese#holiday ではなく official のほうを使う
+  static const holidayCalendarId = 'ja.japanese.official#holiday@group.v.calendar.google.com';
+
+  /// [from] から [to] までの祝日を「日付 → 祝日名」で返す（読むだけ。今の権限 calendar.events で読める見込み）。
+  /// official にも銀行休業日が混じることがあるという報告があるので、名前で外す
+  Future<Map<DateTime, String>> fetchHolidays(DateTime from, DateTime to) async {
+    final result = <DateTime, String>{};
+    String? pageToken;
+    do {
+      final res = await _api.events.list(
+        holidayCalendarId,
+        timeMin: from.toUtc(),
+        timeMax: to.toUtc(),
+        singleEvents: true,
+        maxResults: 250,
+        pageToken: pageToken,
+      );
+      for (final e in res.items ?? <gcal.Event>[]) {
+        final name = (e.summary ?? '').trim();
+        final date = e.start?.date;
+        if (name.isEmpty || date == null || name.contains('銀行休業日')) continue;
+        final endDate = e.end?.date;
+        var d = DateTime(date.year, date.month, date.day);
+        final last = endDate == null ? d : DateTime(endDate.year, endDate.month, endDate.day);
+        // 終日の予定の終わりは「翌日」で表される。1日だけのものがほとんどだが、念のため日ごとに入れる
+        do {
+          result[d] = result[d] == null ? name : '${result[d]}・$name';
+          d = DateTime(d.year, d.month, d.day + 1);
+        } while (d.isBefore(last));
+      }
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && result.length < 1000);
+    return result;
+  }
+
+  /// 予定を ID で1件読む（タスクにつないだ予定を開くため。2026-11-24 の25）。
+  /// 消された予定（cancelled）・見つからない予定は null
+  Future<CalendarEvent?> get(String id) async {
+    try {
+      final e = await _api.events.get(_cal, id);
+      if (e.status == 'cancelled') return null;
+      return _fromGoogle(e);
+    } on gcal.DetailedApiRequestError catch (e) {
+      if (e.status == 404 || e.status == 410) return null;
+      rethrow;
+    }
+  }
+
   /// メモ欄の文字で予定を探す（メールのリンクの逆引き用。期間は限らない。2026-11-19）
   Future<List<CalendarEvent>> search(String text) async {
     final res = await _api.events.list(_cal, q: text, singleEvents: true, maxResults: 50);
@@ -71,6 +120,7 @@ class CalendarService {
       note: split.body,
       memoLinks: split.links,
       mailLinks: split.mails,
+      colorKey: split.color,
       location: e.location,
       recurring: e.recurringEventId != null,
     );
@@ -80,7 +130,7 @@ class CalendarService {
   static gcal.Event _toGoogle(CalendarEvent e) {
     final event = gcal.Event(
       summary: e.title,
-      description: joinMemoLinks(e.note, e.memoLinks, e.mailLinks),
+      description: joinMemoLinks(e.note, e.memoLinks, mails: e.mailLinks, color: e.colorKey),
       location: e.location ?? '',
     );
     if (e.allDay) {

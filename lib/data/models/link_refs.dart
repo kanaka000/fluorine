@@ -24,3 +24,15 @@ class MailLinkRef {
   /// 保存したときの件名（メールが見つからないときに見せる）
   final String subject;
 }
+
+/// タスクにつないだ予定（予定とタスクのリンク。2026-11-24 の25）。
+/// タスクのメモ欄の最後の1行 `📅 予定：タイトル〔event:<GoogleカレンダーのID>〕` で保存する（予定の側には書かない）
+class EventLinkRef {
+  const EventLinkRef(this.id, this.title);
+
+  /// Google カレンダーの予定ID（繰り返しの予定は、その回のID）
+  final String id;
+
+  /// 保存したときの予定のタイトル（予定が見つからないときに見せる）
+  final String title;
+}

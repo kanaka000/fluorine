@@ -6,6 +6,7 @@ import '../services/google_auth.dart';
 import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/item_color.dart';
 import '../widgets/sign_in_prompt.dart';
 import '../widgets/swipe_delete.dart';
 import '../widgets/sync_status.dart';
@@ -148,9 +149,12 @@ class _TaskScreenState extends State<TaskScreen> {
       if (note.isNotEmpty) note.split('\n').first,
     ];
     final overdue = !t.done && t.due != null && t.due!.isBefore(today);
-    return ListTile(
+    // 色の付いたタスクはカード全体をその色に（2026-11-24 の24）
+    return ItemColorCard(
+      color: t.color,
+      child: ListTile(
       leading: Checkbox(value: t.done, onChanged: (_) => taskStore.toggle(t)),
-      title: Text(titleWithLinkMarks(t.title, t.memoLinks, t.mailLinks),
+      title: Text(titleWithLinkMarks(t.title, t.memoLinks, t.mailLinks, event: t.eventLinks.isNotEmpty),
           style: t.done ? TextStyle(decoration: TextDecoration.lineThrough, color: theme.colorScheme.outline) : null),
       subtitle: lines.isEmpty
           ? null
@@ -160,6 +164,7 @@ class _TaskScreenState extends State<TaskScreen> {
               style: overdue ? TextStyle(color: theme.colorScheme.error) : null),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => TaskDetailScreen(task: t)),
+      ),
       ),
     );
   }

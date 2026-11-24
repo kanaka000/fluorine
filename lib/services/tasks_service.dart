@@ -45,6 +45,8 @@ class TasksService {
       note: split.body,
       memoLinks: split.links,
       mailLinks: split.mails,
+      colorKey: split.color,
+      eventLinks: split.events,
       done: t.status == 'completed',
       googleTask: t,
     );
@@ -57,7 +59,8 @@ class TasksService {
     final created = await _api.tasks.insert(
       gtasks.Task(
         title: item.title,
-        notes: joinMemoLinks(item.note, item.memoLinks, item.mailLinks),
+        notes: joinMemoLinks(item.note, item.memoLinks,
+            mails: item.mailLinks, color: item.colorKey, events: item.eventLinks),
         due: _dueText(item.due),
       ),
       _list,
@@ -71,7 +74,8 @@ class TasksService {
     if (t == null || t.id == null) return item;
     t
       ..title = item.title
-      ..notes = joinMemoLinks(item.note, item.memoLinks, item.mailLinks)
+      ..notes = joinMemoLinks(item.note, item.memoLinks,
+            mails: item.mailLinks, color: item.colorKey, events: item.eventLinks)
       ..due = _dueText(item.due);
     final updated = await _api.tasks.update(t, _list, t.id!);
     return _fromGoogle(updated) ?? item;

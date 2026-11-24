@@ -58,6 +58,28 @@ class MailBacklinkSection extends StatelessWidget {
   }
 }
 
+/// 予定の詳細画面の「リンクしているタスク」と「タスクにリンク」（2026-11-24 の25）。
+/// リンクはタスクの側にだけ保存するので、タスク（いつも全部読み込んでいる）から探す
+class EventTaskBacklinkSection extends StatelessWidget {
+  const EventTaskBacklinkSection({super.key, required this.event});
+
+  final CalendarEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = event.id;
+    if (id == null) return const SizedBox.shrink();
+    return LinkedItemsSection(
+      title: 'リンクしているタスク',
+      showEvents: false,
+      eventLinked: (_) => false,
+      taskLinked: (t) => t.eventLinks.any((l) => l.id == id),
+      linkEvent: (e) => e,
+      linkTask: (t) => t.copyWith(eventLinks: [...t.eventLinks, EventLinkRef(id, event.title)]),
+    );
+  }
+}
+
 /// 「リンクしている予定・タスク」の共通部分
 class LinkedItemsSection extends StatefulWidget {
   const LinkedItemsSection({
@@ -67,7 +89,15 @@ class LinkedItemsSection extends StatefulWidget {
     required this.linkEvent,
     required this.linkTask,
     this.searchEvents,
+    this.title = 'リンクしている予定・タスク',
+    this.showEvents = true,
   });
+
+  /// 見出し
+  final String title;
+
+  /// 予定を出すか（予定の詳細画面ではタスクだけ。2026-11-24 の25）
+  final bool showEvents;
 
   final bool Function(CalendarEvent e) eventLinked;
   final bool Function(TaskItem t) taskLinked;
@@ -213,7 +243,7 @@ class _LinkedItemsSectionState extends State<LinkedItemsSection> {
         // 読み込み済みの予定を先に（変更が反映済み）、検索で見つかった分は重ならないものだけ足す
         final loaded = calendarStore.allLoaded;
         final ids = {for (final e in loaded) if (e.id != null) e.id!};
-        final events = [
+        final events = !widget.showEvents ? <CalendarEvent>[] : [
           ...loaded.where(widget.eventLinked),
           ..._found.where((e) => e.id == null || !ids.contains(e.id)).where(widget.eventLinked),
         ]..sort((a, b) => a.start.compareTo(b.start));
@@ -226,7 +256,7 @@ class _LinkedItemsSectionState extends State<LinkedItemsSection> {
             const Divider(height: 24),
             Row(
               children: [
-                Text('リンクしている予定・タスク', style: theme.textTheme.titleSmall),
+                Text(widget.title, style: theme.textTheme.titleSmall),
                 if (_searching) ...[
                   const SizedBox(width: 8),
                   const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -268,11 +298,12 @@ class _LinkedItemsSectionState extends State<LinkedItemsSection> {
               Wrap(
                 spacing: 8,
                 children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.event_outlined),
-                    label: const Text('予定にリンク'),
-                    onPressed: _saving ? null : _linkEvent,
-                  ),
+                  if (widget.showEvents)
+                    TextButton.icon(
+                      icon: const Icon(Icons.event_outlined),
+                      label: const Text('予定にリンク'),
+                      onPressed: _saving ? null : _linkEvent,
+                    ),
                   TextButton.icon(
                     icon: const Icon(Icons.check_box_outlined),
                     label: const Text('タスクにリンク'),

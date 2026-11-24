@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
+import '../data/task_store.dart';
 import '../screens/settings_screen.dart';
 import '../services/ai/api_key_store.dart';
 import '../services/claude_service.dart';
@@ -8,6 +9,7 @@ import '../services/errors.dart';
 import 'add_sheets.dart';
 import 'ai_prompt.dart';
 import 'general_ai.dart';
+import 'timed_snack.dart';
 
 // ✨の共通の流れ（2026-11-19 の整理で、5つの画面にあった同じ処理をまとめた）
 
@@ -54,7 +56,9 @@ Future<AiResult?> askAiWithStatus(
 /// 残りをここに渡す（新しい結果の種類を足したら、まずここに足す）。
 /// [mail]：メールの詳細画面から（作る予定・タスク・メモに元のメールの情報を付ける）。
 /// [source]：元の予定・タスク・メモの情報（作るタスク・メモに付ける）。
-/// [openHint]：リンクを頼まれたときの案内「○○を開いてから」
+/// [openHint]：リンクを頼まれたときの案内「○○を開いてから」。
+/// [fromEvent]：予定の詳細画面から（作るタスクに、その予定を自動でリンクする。2026-11-24 の25）。
+/// [fromTask]：タスクの詳細画面から（作った予定を、そのタスクに自動でリンクする。2026-11-24 の25）
 Future<void> handleCommonAiResult(
   BuildContext context,
   String instruction,
@@ -62,12 +66,18 @@ Future<void> handleCommonAiResult(
   Mail? mail,
   String? source,
   String openHint = 'メール・予定・タスク・メモ',
+  CalendarEvent? fromEvent,
+  TaskItem? fromTask,
 }) async {
   switch (result) {
     case AiEvent r:
-      await openNewEventFromAi(context, r, mail: mail);
+      final saved = await openNewEventFromAi(context, r, mail: mail);
+      if (saved != null && saved.id != null && fromTask != null && context.mounted) {
+        await _linkNewEventToTask(context, fromTask, saved);
+      }
     case AiTask r:
-      showAddTaskSheet(context, mail, title: r.title, due: r.due, note: r.note, source: source);
+      showAddTaskSheet(context, mail,
+          title: r.title, due: r.due, note: r.note, source: source, color: r.color, event: fromEvent);
     case AiMemo r:
       showAddMemoSheet(context, mail, title: r.title, body: r.body, source: source);
     case AiNewMail r:
@@ -84,5 +94,16 @@ Future<void> handleCommonAiResult(
       showAiAnswer(context, instruction, 'メールを探すのは、メールのトップ画面の✨から頼んでください。');
     case AiOpenMail _:
       showAiAnswer(context, instruction, 'メールを開くのは、メモを開いてから✨で頼んでください。');
+  }
+}
+
+/// タスクの詳細画面の✨で作った予定を、そのタスクにリンクする（2026-11-24 の25）
+Future<void> _linkNewEventToTask(BuildContext context, TaskItem task, CalendarEvent event) async {
+  final t = taskStore.find(task) ?? task;
+  if (t.eventLinks.any((l) => l.id == event.id)) return;
+  try {
+    await taskStore.update(t, t.copyWith(eventLinks: [...t.eventLinks, EventLinkRef(event.id!, event.title)]));
+  } catch (e) {
+    if (context.mounted) showTimedSnack(context, 'タスクへのリンクを保存できませんでした：${friendlyError(e)}');
   }
 }

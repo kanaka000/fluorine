@@ -1,13 +1,18 @@
+// table_calendar の矢印のための旧 material の Material（パッケージが material_ui に移ったら外す）
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart' as legacy show Material, MaterialType;
 import 'package:material_ui/material_ui.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../data/app_settings.dart';
 import '../data/calendar_store.dart';
+import '../data/task_store.dart';
 import '../services/google_auth.dart';
 import '../widgets/add_sheets.dart';
 import '../widgets/ai_prompt.dart';
 import '../widgets/calendar_ai.dart';
 import '../widgets/header_actions.dart';
+import '../widgets/item_color.dart';
 import '../widgets/sign_in_prompt.dart';
 import '../widgets/swipe_delete.dart';
 import '../widgets/sync_status.dart';
@@ -63,6 +68,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   static String _hm(DateTime d) => hhmm(d);
 
+  /// 祝日の色（日付の見出し・月表示の日付。2026-11-24 の22）
+  static Color _holidayColor(ColorScheme cs) => cs.error;
+
+  /// 日付の見出し。祝日なら祝日名を添えて赤くする
+  Widget _dayHeader(String label, DateTime day, ThemeData theme, {EdgeInsets? padding}) {
+    final holiday = calendarStore.holidayOn(day);
+    return Padding(
+      padding: padding ?? const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(holiday == null ? label : '$label $holiday',
+          style: theme.textTheme.titleSmall?.copyWith(
+              color: holiday == null ? theme.colorScheme.primary : _holidayColor(theme.colorScheme))),
+    );
+  }
+
   // ---------------- AIボタン（予定の追加・予定についての質問） ----------------
 
   Future<void> _aiByVoice() async {
@@ -104,12 +123,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final place = (e.location ?? '').trim();
     final note = eventNoteText(e.note); // 書式付き（HTML）は記号を外す（2026-11-22）
     final sub = [if (place.isNotEmpty) '📍 $place', if (note.isNotEmpty) note].join('\n');
-    return ListTile(
+    // 色の付いた予定はカード全体をその色に（2026-11-24 の24）
+    return ItemColorCard(
+      color: e.color,
+      child: ListTile(
       leading: SizedBox(width: 48, child: time),
-      title: Text(titleWithLinkMarks(e.title, e.memoLinks, e.mailLinks)),
+      title: Text(titleWithLinkMarks(e.title, e.memoLinks, e.mailLinks,
+          task: e.id != null && taskStore.tasks.any((t) => t.eventLinks.any((l) => l.id == e.id)))),
       subtitle: sub.isEmpty ? null : Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => EventDetailScreen(event: e)),
+      ),
       ),
     );
   }
@@ -118,7 +142,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([calendarStore, googleAuth, appSettings]),
+      listenable: Listenable.merge([calendarStore, taskStore, googleAuth, appSettings]),
       builder: (context, _) => Scaffold(
         appBar: AppBar(
           title: const Text('カレンダー'),
@@ -180,27 +204,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final today = DateUtils.dateOnly(DateTime.now());
     // 終わっていない予定（今日より前に始まって続いている予定は「今日」に出す）
     final events = calendarStore.events.where((e) => e.end.isAfter(today)).toList();
-    final children = <Widget>[];
-    DateTime? last;
+    // 日ごとに分ける（予定のない祝日も見出しだけ出す。2026-11-24 の22）
+    final byDay = <DateTime, List<CalendarEvent>>{};
     for (final e in events) {
       var day = DateUtils.dateOnly(e.start);
       if (day.isBefore(today)) day = today;
-      if (day != last) {
-        children.add(Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(_label(day, today),
-              style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary)),
-        ));
-        last = day;
+      byDay.putIfAbsent(day, () => []).add(e);
+    }
+    if (calendarStore.usingGoogle) {
+      final lastDay = today.add(Duration(days: appSettings.calendarDays - 1));
+      for (final h in calendarStore.holidaysBetween(today, lastDay)) {
+        byDay.putIfAbsent(h.key, () => []);
       }
-      // 左右どちらかにスワイプすると削除（「元に戻す」で作り直す）
-      children.add(SwipeToDelete(
-        itemKey: ObjectKey(e),
-        message: '予定を削除しました',
-        onDelete: () => calendarStore.remove(e),
-        onUndo: () => calendarStore.restore(e),
-        child: _eventTile(e, theme),
-      ));
+    }
+    final days = byDay.keys.toList()..sort();
+    final children = <Widget>[];
+    for (final day in days) {
+      children.add(_dayHeader(_label(day, today), day, theme));
+      for (final e in byDay[day]!) {
+        // 左右どちらかにスワイプすると削除（「元に戻す」で作り直す）
+        children.add(SwipeToDelete(
+          itemKey: ObjectKey(e),
+          message: '予定を削除しました',
+          onDelete: () => calendarStore.remove(e),
+          onUndo: () => calendarStore.restore(e),
+          child: _eventTile(e, theme),
+        ));
+      }
     }
     if (children.isEmpty) {
       children.add(const Padding(
@@ -248,7 +278,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           loading: calendarStore.loading || calendarStore.monthLoading,
           error: calendarStore.error,
         ),
-        TableCalendar<CalendarEvent>(
+        // table_calendar は旧 material の InkWell（月の左右の矢印）を使うので、旧 material の Material で包む
+        // （ないと「No Material widget found」の赤い画面になる。2026-11-24）
+        legacy.Material(
+          type: legacy.MaterialType.transparency,
+          child: TableCalendar<CalendarEvent>(
           locale: 'ja',
           firstDay: DateTime(2000),
           lastDay: DateTime(2100, 12, 31),
@@ -281,7 +315,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
             todayTextStyle: TextStyle(color: cs.onPrimaryContainer, fontWeight: FontWeight.bold),
             selectedDecoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
             selectedTextStyle: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.bold),
+            // 祝日は日付を赤く（丸の枠は付けない。2026-11-24 の22）
+            holidayTextStyle: TextStyle(color: _holidayColor(cs)),
+            holidayDecoration: const BoxDecoration(shape: BoxShape.circle),
           ),
+          holidayPredicate: (d) => calendarStore.holidayOn(d) != null,
           eventLoader: calendarStore.eventsOn,
           calendarBuilders: CalendarBuilders(
             markerBuilder: (context, day, events) => _marker(events, cs),
@@ -295,6 +333,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             calendarStore.loadMonth(focused); // その月の予定を読み込む
           },
         ),
+        ),
         const Divider(height: 1),
         // 下：選んだ日の予定
         Expanded(
@@ -304,10 +343,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 88),
               children: [
-                Padding(
+                _dayHeader(
+                  calendarStore.holidayOn(_selectedDay) == null
+                      ? '${_label(_selectedDay, today)} の予定'
+                      : _label(_selectedDay, today),
+                  _selectedDay,
+                  theme,
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('${_label(_selectedDay, today)} の予定',
-                      style: theme.textTheme.titleSmall?.copyWith(color: cs.primary)),
                 ),
                 if (dayEvents.isEmpty)
                   const Padding(

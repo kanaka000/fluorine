@@ -10,6 +10,7 @@ import '../header_actions.dart';
 import '../timed_snack.dart';
 import '../../services/errors.dart';
 import 'sheet_common.dart';
+import '../item_color.dart';
 
 // タスクの追加・変更シート
 
@@ -22,6 +23,8 @@ Future<TaskItem?> showAddTaskSheet(
   DateTime? due,
   String? note,
   String? source,
+  String? color,
+  CalendarEvent? event,
 }) async {
   final initialTitle = (title?.trim().isNotEmpty ?? false)
       ? title!.trim()
@@ -36,6 +39,9 @@ Future<TaskItem?> showAddTaskSheet(
         note: initialNote,
         // メールから作ったタスクには、元のメールをリンクする（2026-11-19）
         mailLinks: mail == null ? const [] : [MailLinkRef(mail.id, mail.subject)],
+        colorKey: MemoColor.of(color)?.key, // ✨で色を言われたとき（2026-11-24 の24）
+        // 予定の詳細画面の✨から作ったタスクには、元の予定をリンクする（2026-11-24 の25）
+        eventLinks: event?.id == null ? const [] : [EventLinkRef(event!.id!, event.title)],
       ),
       aiSource: mail == null ? source : mailForAi(mail),
     ),
@@ -46,7 +52,8 @@ Future<TaskItem?> showAddTaskSheet(
   return saved;
 }
 
-/// タスクの変更。渡した項目だけを差し替えた状態で開く（AIボタンから使う）。変更後のタスクを返す
+/// タスクの変更。渡した項目だけを差し替えた状態で開く（AIボタンから使う）。変更後のタスクを返す。
+/// [color] は色の名前（MemoColor.key）、'none' なら色を外す、null なら今のまま
 Future<TaskItem?> showEditTaskSheet(
   BuildContext context,
   TaskItem task, {
@@ -54,12 +61,15 @@ Future<TaskItem?> showEditTaskSheet(
   DateTime? due,
   bool clearDue = false,
   String? note,
+  String? color,
 }) async {
   final draft = task.copyWith(
     title: (title?.trim().isNotEmpty ?? false) ? title!.trim() : null,
     due: due,
     clearDue: clearDue,
     note: note,
+    colorKey: MemoColor.of(color)?.key,
+    clearColor: color == 'none',
   );
   final saved = await showFormSheet<TaskItem>(context, _TaskForm(draft: draft, editing: task));
   if (saved != null && context.mounted && appSettings.showSavedNotice) {
@@ -88,13 +98,14 @@ class _TaskFormState extends State<_TaskForm> {
   late final _title = TextEditingController(text: widget.draft.title);
   late final _note = TextEditingController(text: widget.draft.note ?? '');
   late DateTime? _due = widget.draft.due;
+  late String? _color = widget.draft.colorKey; // カードの色（2026-11-24 の24。✨で色の名前を言えば変わる）
 
   bool _saving = false;
   bool _aiBusy = false;
   String? _error;
 
   /// AIが入れる前の入力欄（「元に戻す」用）
-  ({String title, DateTime? due, String note})? _beforeAi;
+  ({String title, DateTime? due, String note, String? color})? _beforeAi;
 
   @override
   void dispose() {
@@ -115,7 +126,7 @@ class _TaskFormState extends State<_TaskForm> {
 
   // ---------------- AIボタン（入力欄を埋める） ----------------
 
-  static const _aiHint = '例：期限は来週の金曜／見積書を送る、メモに金額を入れて／名前を短くして';
+  static const _aiHint = '例：期限は来週の金曜／見積書を送る、メモに金額を入れて／黄色にして／名前を短くして';
 
   Future<void> _aiByVoice() async {
     final text = await listenInstruction(context, hint: _aiHint);
@@ -143,10 +154,11 @@ class _TaskFormState extends State<_TaskForm> {
       );
       if (!mounted) return;
       setState(() {
-        _beforeAi = (title: _title.text, due: _due, note: _note.text);
+        _beforeAi = (title: _title.text, due: _due, note: _note.text, color: _color);
         if (r.title.isNotEmpty) _title.text = r.title;
         _due = r.due;
         _note.text = r.note;
+        if (r.color != null) _color = r.color == 'none' ? null : r.color;
         _aiBusy = false;
       });
     } catch (e) {
@@ -166,6 +178,7 @@ class _TaskFormState extends State<_TaskForm> {
       _title.text = b.title;
       _due = b.due;
       _note.text = b.note;
+      _color = b.color;
       _beforeAi = null;
     });
   }
@@ -182,7 +195,14 @@ class _TaskFormState extends State<_TaskForm> {
       _error = null;
     });
     final base = widget.editing ?? widget.draft;
-    final task = base.copyWith(title: title, due: _due, clearDue: _due == null, note: _note.text.trim());
+    final task = base.copyWith(
+      title: title,
+      due: _due,
+      clearDue: _due == null,
+      note: _note.text.trim(),
+      colorKey: _color,
+      clearColor: _color == null,
+    );
     try {
       final editing = widget.editing;
       final saved =
@@ -218,6 +238,8 @@ class _TaskFormState extends State<_TaskForm> {
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
         const SizedBox(height: 12),
         TextField(controller: _title, decoration: const InputDecoration(labelText: 'やること')),
+        const SizedBox(height: 12),
+        ItemColorPicker(selected: _color, onChanged: (c) => setState(() => _color = c)),
         const SizedBox(height: 8),
         ListTile(
           contentPadding: EdgeInsets.zero,

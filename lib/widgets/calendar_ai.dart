@@ -53,7 +53,7 @@ List<CalendarEvent> _upcoming() {
 }
 
 const calendarAiHint = '例：明日の15時から歯医者を入れて／明日の歯医者を消して／今週の予定は？／期限が近いタスクは？';
-const eventAiHint = '例：15時からに変更して／場所を渋谷駅にして／準備することをタスクにして／買い物リストのメモをつないで／この予定を削除して';
+const eventAiHint = '例：15時からに変更して／緑にして／場所を渋谷駅にして／準備することをタスクにして／買い物リストのメモをつないで／この予定を削除して';
 
 /// カレンダーのAIボタンの処理。
 /// [selected] があればその予定を対象にする（詳細画面）。変更の画面で保存したら [onUpdated] を呼ぶ
@@ -90,6 +90,7 @@ Future<void> runCalendarAi(
         allDay: r.allDay ?? (r.time != null ? false : null),
         location: r.location,
         note: r.note,
+        color: r.color,
       );
       if (saved != null) onUpdated?.call(saved);
     case AiEvent r:
@@ -109,6 +110,7 @@ Future<void> runCalendarAi(
         allDay: (r.allDay ?? false) || r.time == null,
         location: r.location,
         note: r.note,
+        color: r.color,
       );
       // 新しい予定を保存したら、元の予定を消すか確認する（押すのは自分）
       if (saved == null || original == null || !context.mounted) return;
@@ -128,6 +130,7 @@ Future<void> runCalendarAi(
       final saved = await runLinkAi(context, r, event: selected);
       if (saved != null) onUpdated?.call(saved);
     default:
-      await handleCommonAiResult(context, instruction, result, source: source, openHint: '予定');
+      await handleCommonAiResult(context, instruction, result,
+          source: source, openHint: '予定', fromEvent: selected);
   }
 }

@@ -225,7 +225,7 @@ class ClaudeService {
       'tools': [
         createEventToolForCalendar,
         if (selected != null) updateEventTool,
-        if (selected != null) linkTool(const ['memo', 'mail']),
+        if (selected != null) linkTool(const ['memo', 'mail', 'task']),
         deleteEventTool,
         createTaskTool,
         createMemoTool,
@@ -288,7 +288,7 @@ class ClaudeService {
         updateTaskTool,
         completeTaskTool,
         deleteTaskTool,
-        if (selected != null) linkTool(const ['memo', 'mail']),
+        if (selected != null) linkTool(const ['memo', 'mail', 'event']),
         createMemoTool,
         createEventTool,
         draftNewMailTool,
@@ -338,6 +338,7 @@ class ClaudeService {
               'title': {'type': 'string', 'description': 'やること（短く、動詞で終える）'},
               'due': {'type': 'string', 'description': '期限 YYYY-MM-DD。なければ省略'},
               'note': {'type': 'string', 'description': 'メモ（なければ空）'},
+              'color': aiColorProp, // 「黄色で」と言われたとき（2026-11-24 の24）
             },
             'required': ['title'],
           },
@@ -351,7 +352,8 @@ class ClaudeService {
     final use = claudeToolUse(json);
     if (use.name == null) throw const AppMessage('AIから入力内容を受け取れませんでした。もう一度試してください');
     String str(String k) => (use.input[k] as String?)?.trim() ?? '';
-    return AiTask(title: str('title'), due: aiDate(use.input['due']), note: str('note'));
+    return AiTask(
+        title: str('title'), due: aiDate(use.input['due']), note: str('note'), color: aiColor(use.input['color']));
   }
 
   /// メモについての頼みごと。[selected] があれば、そのメモを対象にする（メモの詳細画面から）

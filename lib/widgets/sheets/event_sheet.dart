@@ -8,6 +8,7 @@ import '../timed_snack.dart';
 import '../../services/errors.dart';
 import '../../util/date_text.dart';
 import 'sheet_common.dart';
+import '../item_color.dart';
 import '../../util/html_text.dart';
 
 // 予定の追加・変更シート
@@ -25,6 +26,7 @@ Future<CalendarEvent?> showAddEventSheet(
   bool? allDay,
   String? note,
   String? location,
+  String? color,
 }) async {
   final isAllDay = allDay ?? false;
   final start = _startOf(date ?? DateUtils.dateOnly(DateTime.now().add(const Duration(days: 1))),
@@ -40,6 +42,7 @@ Future<CalendarEvent?> showAddEventSheet(
     location: location?.trim() ?? '',
     // メールから作った予定には、元のメールをリンクする（2026-11-19）
     mailLinks: mail == null ? const [] : [MailLinkRef(mail.id, mail.subject)],
+    colorKey: MemoColor.of(color)?.key, // ✨で色を言われたとき（2026-11-24 の24）
   );
   final saved = await showFormSheet<CalendarEvent>(context, _EventForm(draft: draft));
   if (saved != null && context.mounted) {
@@ -48,7 +51,8 @@ Future<CalendarEvent?> showAddEventSheet(
   return saved;
 }
 
-/// 予定の変更。渡した項目だけを差し替えた状態で開く（AIボタンから使う）。変更後の予定を返す
+/// 予定の変更。渡した項目だけを差し替えた状態で開く（AIボタンから使う）。変更後の予定を返す。
+/// [color] は色の名前（MemoColor.key）、'none' なら色を外す、null なら今のまま
 Future<CalendarEvent?> showEditEventSheet(
   BuildContext context,
   CalendarEvent event, {
@@ -60,6 +64,7 @@ Future<CalendarEvent?> showEditEventSheet(
   bool? allDay,
   String? note,
   String? location,
+  String? color,
 }) async {
   final isAllDay = allDay ?? event.allDay;
   final keepTime = event.allDay ? null : TimeOfDay.fromDateTime(event.start);
@@ -79,6 +84,8 @@ Future<CalendarEvent?> showEditEventSheet(
     allDay: isAllDay,
     note: note,
     location: location,
+    colorKey: MemoColor.of(color)?.key,
+    clearColor: color == 'none',
   );
   final saved = await showFormSheet<CalendarEvent>(context, _EventForm(draft: draft, editing: event));
   if (saved != null && context.mounted && appSettings.showSavedNotice) {
@@ -135,6 +142,7 @@ class _EventFormState extends State<_EventForm> {
           ? eventNoteText(widget.draft.note, keepLinks: true)
           : (widget.draft.note ?? ''));
   late bool _allDay = widget.draft.allDay;
+  late String? _color = widget.draft.colorKey; // カードの色（2026-11-24 の24）
   late DateTime _start = widget.draft.start;
 
   /// 時刻ありの終了日時、または終日の最後の日
@@ -240,6 +248,8 @@ class _EventFormState extends State<_EventForm> {
       allDay: _allDay,
       note: (_noteHtml != null && _note.text.trim() == _noteHtmlText!.trim()) ? _noteHtml : _note.text.trim(),
       location: _location.text.trim(),
+      colorKey: _color,
+      clearColor: _color == null,
     );
     try {
       final editing = widget.editing;
@@ -284,6 +294,8 @@ class _EventFormState extends State<_EventForm> {
           ),
         const SizedBox(height: 16),
         TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル')),
+        const SizedBox(height: 12),
+        ItemColorPicker(selected: _color, onChanged: (c) => setState(() => _color = c)),
         const SizedBox(height: 8),
         TextField(
           controller: _location,

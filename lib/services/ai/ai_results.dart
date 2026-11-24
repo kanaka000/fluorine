@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../data/models.dart';
+
 // ✨の結果の型と、Claudeの返事から結果を作る部分（2026-11-19 の整理で分けた）
 
 DateTime? aiDate(Object? v) {
@@ -10,6 +12,13 @@ DateTime? aiDate(Object? v) {
 TimeOfDay? aiTime(Object? v) {
   final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch((v as String?)?.trim() ?? '');
   return m == null ? null : TimeOfDay(hour: int.parse(m.group(1)!), minute: int.parse(m.group(2)!));
+}
+
+/// カードの色（2026-11-24 の24）：色の名前（MemoColor.key）か 'none'（外す）。言われていなければ null
+String? aiColor(Object? v) {
+  final s = (v is String) ? v.trim().toLowerCase() : '';
+  if (s == 'none') return 'none';
+  return MemoColor.of(s)?.key;
 }
 
 String? aiOptStr(Map<String, dynamic> input, String k) {
@@ -29,6 +38,7 @@ AiEvent aiEventFrom(Map<String, dynamic> input, {bool update = false}) {
     allDay: input['all_day'] is bool ? input['all_day'] as bool : null,
     location: aiOptStr(input, 'location'),
     note: aiOptStr(input, 'note'),
+    color: aiColor(input['color']),
   );
 }
 
@@ -56,13 +66,15 @@ AiResult aiResultFrom(({String? name, Map<String, dynamic> input, String text}) 
         due: aiDate(input['due']),
         clearDue: input['clear_due'] == true,
         note: input['note'] is String ? (input['note'] as String).trim() : null,
+        color: aiColor(input['color']),
       );
     case 'complete_task':
       return AiTaskComplete(aiInt(input['number']));
     case 'delete_task':
       return AiTaskDelete(aiInt(input['number']));
     case 'create_task':
-      return AiTask(title: str('title'), due: aiDate(input['due']), note: str('note'));
+      return AiTask(
+          title: str('title'), due: aiDate(input['due']), note: str('note'), color: aiColor(input['color']));
     case 'update_memo':
       return AiMemoUpdate(
         number: aiInt(input['number']),
@@ -134,6 +146,7 @@ class AiEvent extends AiResult {
     this.allDay,
     this.location,
     this.note,
+    this.color,
   });
   final bool update;
 
@@ -147,6 +160,9 @@ class AiEvent extends AiResult {
   final bool? allDay;
   final String? location;
   final String? note;
+
+  /// カードの色（色の名前か 'none'。言われていなければ null）
+  final String? color;
 }
 
 /// 予定の削除の依頼（[number] は「これからの予定」の番号。null なら選んでいる予定）。
@@ -157,20 +173,26 @@ class AiDeleteEvent extends AiResult {
 }
 
 class AiTask extends AiResult {
-  AiTask({required this.title, this.due, this.note = ''});
+  AiTask({required this.title, this.due, this.note = '', this.color});
   final String title;
   final DateTime? due;
   final String note;
+
+  /// カードの色（色の名前か 'none'。言われていなければ null）
+  final String? color;
 }
 
 /// タスクの変更（[number] は一覧の番号。null なら選んでいるタスク。省略された項目は null）
 class AiTaskUpdate extends AiResult {
-  AiTaskUpdate({this.number, this.title, this.due, this.clearDue = false, this.note});
+  AiTaskUpdate({this.number, this.title, this.due, this.clearDue = false, this.note, this.color});
   final int? number;
   final String? title;
   final DateTime? due;
   final bool clearDue;
   final String? note;
+
+  /// カードの色（色の名前か 'none'。言われていなければ null）
+  final String? color;
 }
 
 /// タスクを完了にする依頼（確認画面を出すだけ）
